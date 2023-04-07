@@ -1,3 +1,4 @@
+#! /usr/bin/env node
 /*
   Copyright 2023 Adligo Inc / Scott Morgan
 
@@ -13,4 +14,5 @@
    See the License for the specific language governing permissions and
    limitations under the License.
    */
-console.log('hello slink')
+
+  console.log('hello slink');
