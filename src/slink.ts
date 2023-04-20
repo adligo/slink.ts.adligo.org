@@ -15,6 +15,7 @@
   * limitations under the License.
   */
 const { spawnSync } = require('child_process')
+const { fs } = require('fs');
 const { stream } = require('stream'); 
 import {I_Out} from '@ts.adligo.org/io';
 
@@ -277,8 +278,14 @@ class CliCtx {
           out('\t\t' + flag.description);
         }
       }
+      this.done = true;
     } else if (this.map.get(VERSION.cmd)) {
-
+      let homePkgJson = this.home + 'package.json';
+      out('Got homePkgJson ' + homePkgJson);
+      let json = fs.readFileSync(homePkgJson);
+      out('Got JSON string ' + json);
+      let jObj = JSON.parse(json);
+      out('Got JSON ' + jObj);
     }
   }
   getHome(): string { return this.home; }
