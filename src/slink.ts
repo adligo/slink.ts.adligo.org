@@ -364,6 +364,7 @@ class CliCtx {
       let jObj = JSON.parse(json);
       //out('Got JSON ' + jObj);
       out(jObj.version);
+      this.done = true;
     }
   }
   getHome(): string { return this.home; }
