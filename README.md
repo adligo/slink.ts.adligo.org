@@ -24,6 +24,14 @@ In Example, under the root package.json object add the attribute;
       "modulePath": "io"}]
   }],
 ```
+
+## Install Locally
+You can install this slink command line application locally with grunt;
+```
+npm install -g grunt-cli
+cd slink.ts.adligo.org
+grunt
+```
 ## Uninstall the package;
 ```
 npm uninstall -g @ts.adligo.org/slink
