@@ -210,6 +210,7 @@ export class Pwd {
   public toPath() { return this.path; }
 }
 
+
 export class Ln {
   static st(from: string, name: string, workingDir: string) {
     try {
@@ -221,6 +222,36 @@ export class Ln {
       }
     } catch (e) {
       throw Error(UnixCmdError1 + 'ln' + UnixCmdError2 + e);
+    }
+  }
+}
+
+export class Mkdir {
+  static mkdir(dir: string) {
+    try {
+      let mkdir = spawnSync('mkdir',[dir]);
+      var out = "" + mkdir.output;
+      //console.log('pwd output is ' + pwd.output);
+      if ('null' == out) {
+        throw Error('The output from mkdir ' + dir + ' is ' + out);
+      }
+    } catch (e) {
+      throw Error(UnixCmdError1 + 'mkdir' + UnixCmdError2 + e);
+    }
+  }
+}
+
+export class Rm {
+  static forceRecursive(dir: string) {
+    try {
+      let rm = spawnSync('rm',['-fr', dir]);
+      var rmout = "" + rm.output;
+      //console.log('pwd output is ' + pwd.output);
+      if ('null' == rmout) {
+        throw Error('The output from rm -fr ' + dir + ' is ' + rmout);
+      }
+    } catch (e) {
+      throw Error(UnixCmdError1 + 'rm' + UnixCmdError2 + e);
     }
   }
 }
@@ -339,18 +370,71 @@ class CliCtx {
   isDone(): boolean { return this.done; }
 }
 
-export interface I_DependencySLink {
+export interface I_DependencySLinkGroup {
+  group: string;
+  projects: I_DependencySLinkProject[];
+}
+
+export interface I_DependencySLinkProject {
+  project: string;
+  modulePath: string;
+}
+
+export class DependencySLinkGroup {
+  private group: string;
+  private projects: DependencySLinkProject[];
+  private unixIn: string;
+
+  constructor(info: I_DependencySLinkGroup, ctx: CliCtx) {
+    this.group = info.group;
+    this.projects = DependencySLinkProject.to(this.group, info.projects, ctx);
+    this.unixIn = ctx.getHome() + '/node_modules/' + this.group;
+  }
+  getGroup(): string { return this.group;}
+  getProjects(): DependencySLinkProject[] { return this.projects;}
+  getIn(): string { return this.unixIn;}
+}
+
+export class DependencySLinkProject {
+  static to(group: string, projects: I_DependencySLinkProject[], ctx: CliCtx): DependencySLinkProject[] {
+    let r = new Array(projects.length);
+    for (var i=0; i < projects.length; i++) {
+      r[i] = new DependencySLinkProject(group, projects[i], ctx);
+    }
+    return r;
+  }
+  private project: string;
+  private modulePath: string;
+  private unixTo: string;
+
+  constructor(group: string, info: I_DependencySLinkProject, ctx: CliCtx) {
+    this.project = info.project;
+    this.modulePath = info.modulePath;
+    this.unixTo = '../../../' + info.project;
+  }
+
+  getProjectName(): string { return this.project; }
+  getModluePath(): string { return this.modulePath; }
+  getTo(): string { return this.unixTo; }
+
+  toString(): string {
+    return 'DependencySLinkProject [project=\'' + this.project + '\', modulePath=\'' +
+      this.modulePath + '\', unixTo=\'' + this.unixTo + '\']';
+  }
+}
+
+export interface I_DependencySrcSLink {
   project: string;
   srcPath: string;
   destPath: string;
 }
 
-export class DependencySLink {
+export class DependencySrcSLink {
   private unixIn: string;
   private unixTo: string;
   private name: string;
 
-  constructor(slink: I_DependencySLink, ctx: CliCtx) {
+  constructor(slink: I_DependencySrcSLink, ctx: CliCtx) {
     this.name =slink.project + '@slink';
     if (slink.destPath == undefined) {
       this.unixIn = ctx.getHome() + '/src';
@@ -379,14 +463,34 @@ if (!ctx.isDone()) {
   let currentPkgJsonOs =  Paths.toOsPath(currentPkgJson);
   out('reading ' + currentPkgJsonOs);
   let json = JSON.parse(fs.readFileSync(currentPkgJsonOs));
-  var slinks : I_DependencySLink[] = json.dependencySLinks;
+  var slinks : I_DependencySrcSLink[] = json.dependencySrcSLinks;
   if (slinks == undefined || slinks.length == 0) {
-    out('No dependencySLinks found in \n\t' + currentPkgJsonOs);
+    out('No dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
   } else {
     for (var i=0; i < slinks.length; i++) {
-      let dl = new DependencySLink(slinks[i], ctx);
+      let dl = new DependencySrcSLink(slinks[i], ctx);
       out(dl.toString());
       Ln.st(dl.getTo(), dl.getName(), Paths.toOsPath(dl.getIn()));
+    }
+  }
+
+  var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
+  if (linkGroups == undefined || linkGroups.length == 0) {
+    out('No dependencySLinkGroups found in \n\t' + currentPkgJsonOs);
+  } else {
+    for (var i=0; i < linkGroups.length; i++) {
+      let g = new DependencySLinkGroup(linkGroups[i], ctx);
+      let gdir = 'node_modules/' + g.getGroup();
+      out('Deleting ' + gdir);
+      Rm.forceRecursive(gdir);
+      out('Creating ' + gdir);
+      Mkdir.mkdir(gdir);
+      let inDir = Paths.toOsPath(g.getIn());
+      out('Linking in ' + inDir);
+      g.getProjects().forEach((p) => {
+        out(p.toString());
+        Ln.st(p.getTo(), p.getModluePath(), inDir);
+      });
     }
   }
 }

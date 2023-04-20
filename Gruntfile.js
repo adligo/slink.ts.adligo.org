@@ -17,10 +17,15 @@ function clean() {
   run('rm',['-fr','dist']);
 }
 
+function getDependencies() {
+    run(npm,['i']);
+  }
+
 const DLOCAL_DESC = 'Uninstalls transpiles and installes slink on the  local machine.';
 function dlocal() {
     uninstall();
     clean();
+    //getDependencies();
     build();
     install();
     console.log('You can now run the following manual tests;\n\tslink --help')
