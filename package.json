@@ -10,6 +10,10 @@
   "dependencies": {
     "typescript": "^5.0.3"
   },
+  "todo": "remove dependencySLinks below, it's just for testing ;)",
+  "dependencySLinks": [{
+    "project": "io.ts.adligo.org"
+  }],
   "devDependencies": {
     "@ts.adligo.org/io": "^0.0.7",
     "@types/node": "^18.15.12",

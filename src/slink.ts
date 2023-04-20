@@ -20,7 +20,7 @@ const { stream } = require('stream');
 import {I_Out} from '@ts.adligo.org/io';
 
 const IS_WINDOWS = process.platform === "win32";
-const foo : I_Out = (foo) => console.log(foo);
+const out : I_Out = (foo) => console.log(foo);
 
 /**
  * This is a set of attributes that can be used on the Command Line as
@@ -191,7 +191,7 @@ export class Paths {
 
 const UnixCmdError1 = 'Unable to run the UNIX ';
 const UnixCmdError2 = ' command!\nIf your running on Windows try using GitBash to run this program!\n';
-class Pwd {
+export class Pwd {
   private path: string;
 
   constructor() {
@@ -208,6 +208,21 @@ class Pwd {
     }
   }
   public toPath() { return this.path; }
+}
+
+export class Ln {
+  static st(from: string, name: string, workingDir: string) {
+    try {
+      let ln = spawnSync('ln',['-s', '-T', from, name], { cwd: workingDir });
+      var lnout = "" + ln.output;
+      //console.log('pwd output is ' + pwd.output);
+      if ('null' == lnout) {
+        throw Error('The output from ln is ' + lnout);
+      }
+    } catch (e) {
+      throw Error(UnixCmdError1 + 'ln' + UnixCmdError2 + e);
+    }
+  }
 }
 const HELP: I_CliCtxFlag = {cmd: "help", description: "Displays the Help Menu, prints this output."}
 const VERSION: I_CliCtxFlag = {cmd: "version", description: "Displays the version.", flag: true, letter: "v"}
@@ -321,10 +336,59 @@ class CliCtx {
     }
   }
   getHome(): string { return this.home; }
+  isDone(): boolean { return this.done; }
 }
 
+export interface I_DependencySLink {
+  project: string;
+  srcPath: string;
+  destPath: string;
+}
+
+export class DependencySLink {
+  private unixIn: string;
+  private unixTo: string;
+  private name: string;
+
+  constructor(slink: I_DependencySLink, ctx: CliCtx) {
+    this.name =slink.project + '@slink';
+    if (slink.destPath == undefined) {
+      this.unixIn = ctx.getHome() + '/src';
+    } else {
+      this.unixIn = ctx.getHome() + slink.destPath;
+    }
+    if (slink.srcPath == undefined) {
+      this.unixTo  = '../../' + slink.project + '/src';
+    } else {
+      this.unixTo  = '../../' + slink.project + slink.srcPath;
+    }
+  }
+  getIn(): string { return this.unixIn;}
+  getName(): string { return this.name; }
+  getTo(): string { return this.unixTo; }
+  toString(): string {
+    return 'DependencySLink [name=\'' + this.name + '\', unixIn=\'' + this.unixIn +
+      '\', unixTo=\'' + this.unixTo + '\']';
+  }
+}
 //console.log('hello slink2 ');
 let flags: I_CliCtxFlag[] = [HELP, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
+if (!ctx.isDone()) {
+  let currentPkgJson = ctx.getHome() + '/package.json';
+  let currentPkgJsonOs =  Paths.toOsPath(currentPkgJson);
+  out('reading ' + currentPkgJsonOs);
+  let json = JSON.parse(fs.readFileSync(currentPkgJsonOs));
+  var slinks : I_DependencySLink[] = json.dependencySLinks;
+  if (slinks == undefined || slinks.length == 0) {
+    out('No dependencySLinks found in \n\t' + currentPkgJsonOs);
+  } else {
+    for (var i=0; i < slinks.length; i++) {
+      let dl = new DependencySLink(slinks[i], ctx);
+      out(dl.toString());
+      Ln.st(dl.getTo(), dl.getName(), Paths.toOsPath(dl.getIn()));
+    }
+  }
+}
 //console.log('CliArgParser created with home\n\t' + ctx.getHome());
 
