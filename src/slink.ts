@@ -456,7 +456,10 @@ export class DependencySrcSLink {
   }
 }
 //console.log('hello slink2 ');
-let flags: I_CliCtxFlag[] = [HELP, VERSION];
+const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
+  "\t\tdetails are here;\n" +
+  "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
+let flags: I_CliCtxFlag[] = [DEFAULT, HELP, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
   let currentPkgJson = ctx.getHome() + '/package.json';
