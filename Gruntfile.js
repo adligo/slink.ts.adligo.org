@@ -17,6 +17,15 @@ function clean() {
   run('rm',['-fr','dist']);
 }
 
+const DLOCAL_DESC = 'Uninstalls transpiles and installes slink on the  local machine.';
+function dlocal() {
+    uninstall();
+    clean();
+    build();
+    install();
+    console.log('You can now run the following manual tests;\n\tslink --help')
+}
+
 function install() {
   run(npm,['install','-g','.']);
 }
@@ -56,13 +65,7 @@ module.exports = function(grunt) {
     
   });
   
-  grunt.registerTask('dlocal', 'Uninstalls transpiles and installes slink on the  local machine.', 
-    function() {
-      grunt.log.writeln(this.name + ", no args");
-      uninstall();
-      clean();
-      build();
-      install();
-    });
+  grunt.registerTask('dlocal', DLOCAL_DESC, dlocal);
+  grunt.registerTask('default', DLOCAL_DESC, dlocal);
   
   };

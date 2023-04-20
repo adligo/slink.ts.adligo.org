@@ -15,10 +15,11 @@
   * limitations under the License.
   */
 const { spawnSync } = require('child_process')
-const { fs } = require('fs');
+const fs = require('node:fs');
 const { stream } = require('stream'); 
 import {I_Out} from '@ts.adligo.org/io';
 
+const IS_WINDOWS = process.platform === "win32";
 const foo : I_Out = (foo) => console.log(foo);
 
 /**
@@ -129,9 +130,36 @@ export class Paths {
   static toUnixPath(parts: string[]): string {
     let b = '/';
     for (var i=0; i < parts.length; i++) {
-      b = b.concat(parts[i]).concat('/');
+      if (i == parts.length - 1) {
+        b = b.concat(parts[i]);
+      } else {
+        b = b.concat(parts[i]).concat('/');
+      }
     }
     return b;
+  }
+
+  static toWindowsPath(parts: string[]): string {
+    let b = '';
+    for (var i=0; i < parts.length; i++) {
+      if (i == 0) {
+        b = parts[0].toUpperCase() + ':\\';
+      } else if (i == parts.length -1) {
+        b = b.concat(parts[i]);
+      } else {
+        b = b.concat(parts[i]).concat('\\');
+      }
+    }
+    return b;
+  }
+
+  static toOsPath(path: string): string {
+    let parts = this.toParts(path);
+    if (IS_WINDOWS) {
+      return this.toWindowsPath(parts);
+    } else {
+      return this.toUnixPath(parts);
+    }
   }
   /**
    * 
@@ -156,6 +184,7 @@ export class Paths {
         b = b.concat(c);
       }
     }
+    r[j] = b;
     return r;
   }
 }
@@ -231,7 +260,7 @@ class CliCtx {
     this.home = Paths.toUnixPath(homeParts.slice(0, homeParts.length - belowRoot))
     for (var i=2; i< args.length; i++) {
       let a = args[i];
-      out('processing cli arg ' + a);
+      //out('processing cli arg ' + a);
       if (a.length < 2) {
         let a = i -1;
         throw Error('Unable to parse command line arguments, issue at argument; ' + a);
@@ -239,7 +268,7 @@ class CliCtx {
         let dd = a.substring(0,2);
         if (dd == '--') {
           let cmd = a.substring(2, a.length);
-          out('cmd is ' + cmd);
+          //out('cmd is ' + cmd);
           let flag: CliCtxFlag = map2Cmds.get(cmd);
           if (flag.isFlag()) {
             this.map.set(cmd, new CliCtxArg(flag));            
@@ -254,9 +283,9 @@ class CliCtx {
           //process letters
           for (var j=1; j < a.length; j++) {
             let l = a.charAt(j);
-            out('processing letter ' + l);
+            //out('processing letter ' + l);
             let flag: CliCtxFlag = map2Letters.get(l);
-            out('got command ' + flag.getCmd() + ' for letter ' + l);
+            //out('got command ' + flag.getCmd() + ' for letter ' + l);
             this.map.set(flag.getCmd(), new CliCtxArg(flag));  
           }
         } else {
@@ -271,7 +300,7 @@ class CliCtx {
         let flag: I_CliCtxFlag = flags[i];
         var m = '\t--' + flag.cmd;
         if (flag.letter != undefined) {
-          m = m + ' / ' + flag.letter;
+          m = m + ' / -' + flag.letter;
         }
         out(m);
         if (flag.description != undefined) {
@@ -280,19 +309,22 @@ class CliCtx {
       }
       this.done = true;
     } else if (this.map.get(VERSION.cmd)) {
-      let homePkgJson = this.home + 'package.json';
-      out('Got homePkgJson ' + homePkgJson);
+      let homePkgJsonName = this.home + '/package.json';
+      //out('Got homePkgJsonName ' + homePkgJsonName);
+      let homePkgJson =  Paths.toOsPath(homePkgJsonName);
+      //out('Got homePkgJson ' + homePkgJson + ' fs is ' + fs);
       let json = fs.readFileSync(homePkgJson);
-      out('Got JSON string ' + json);
+      //out('Got JSON string ' + json);
       let jObj = JSON.parse(json);
-      out('Got JSON ' + jObj);
+      //out('Got JSON ' + jObj);
+      out(jObj.version);
     }
   }
   getHome(): string { return this.home; }
 }
 
-console.log('hello slink2 ');
+//console.log('hello slink2 ');
 let flags: I_CliCtxFlag[] = [HELP, VERSION];
-let ctx = new CliCtx(flags);
-console.log('CliArgParser created with home\n\t' + ctx.getHome());
+let ctx = new CliCtx(flags, process.argv, 2);
+//console.log('CliArgParser created with home\n\t' + ctx.getHome());
 
