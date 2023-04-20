@@ -17,9 +17,6 @@
       "project": "io.ts.adligo.org",
       "modulePath": "io"}]
   }],
-  "dependencySrcSLinks": [{
-    "project": "io.ts.adligo.org"
-  }],
   "devDependencies": {
     "@ts.adligo.org/io": "^0.0.7",
     "@types/node": "^18.15.12",
