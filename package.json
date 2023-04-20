@@ -1,7 +1,7 @@
 {
   "author": "Scott Morgan",
   "bin": {
-    "slink": "./slink.ts"
+    "slink": "./dist/slink.js"
   },
   "bugs": {
     "url": "https://github.com/adligo/slink.ts.adligo.org/issues"
@@ -26,14 +26,15 @@
   ],
   "license": "Apache-2.0",
   "name": "@ts.adligo.org/slink",
-  "main": "src/slink.mts",
+  "main": "src/slink.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adligo/slink.ts.adligo.org.git"
   },
   "scripts": {
     "run": "ts-node src/slink.ts",
-    "test": "test"
+    "test": "test",
+    "tsc": "tsc"
   },
   "type": "commonjs",
   "version": "1.0.1"
