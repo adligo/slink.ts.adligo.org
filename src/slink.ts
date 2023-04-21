@@ -81,22 +81,6 @@ export class CliCtxArg {
   getFlag(): CliCtxFlag { return this.flag}
 }
 
-export class Strings {
-  static removeChars(s: string, chars: Set<string>): string {
-    var r = '';
-    for (var i=0; i < s.length; i ++) {
-      let c = s.charAt(i);
-      var t = true;
-      if (chars.has(c)) {
-        //console.log('ignoring ' + c);
-      } else {
-        //console.log('adding ' + c);
-        r = r.concat(c);
-      }
-    }
-    return r;
-  }
-}
 
 export class Paths {
   /**
@@ -191,25 +175,6 @@ export class Paths {
 
 const UnixCmdError1 = 'Unable to run the UNIX ';
 const UnixCmdError2 = ' command!\nIf your running on Windows try using GitBash to run this program!\n';
-export class Pwd {
-  private path: string;
-
-  constructor() {
-    try {
-      let pwd = spawnSync('pwd',[]);
-      var pi = "" + pwd.output;
-      //console.log('pwd output is ' + pwd.output);
-      if ('null' == pi) {
-        throw Error('The output from pwd is ' + pi);
-      }
-      this.path = Strings.removeChars(pi,new Set<string>().add(',').add('\n'));
-    } catch (e) {
-      throw Error(UnixCmdError1 + 'pwd' + UnixCmdError2 + e);
-    }
-  }
-  public toPath() { return this.path; }
-}
-
 
 export class Ln {
   static st(from: string, name: string, workingDir: string) {
@@ -499,4 +464,3 @@ if (!ctx.isDone()) {
   }
 }
 //console.log('CliArgParser created with home\n\t' + ctx.getHome());
-
