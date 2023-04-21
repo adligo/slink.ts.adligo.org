@@ -14,8 +14,9 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-const { spawnSync } = require('child_process')
 const fs = require('node:fs');
+//const path  = require('path');
+const { spawnSync } = require('child_process')
 const { stream } = require('stream'); 
 import {I_Out} from '@ts.adligo.org/io';
 
@@ -239,7 +240,9 @@ class CliCtx {
    * @param out 
    */
   constructor(flags: I_CliCtxFlag[], args?: string [], belowRoot?: number, out?: I_Out) {
-    this.path = new Pwd().toPath();
+    //this.path = path.resolve('.');
+    //this.path = process.mainModule.filename;
+    this.path = __dirname;
     if (args == undefined) {
       args = process.argv;
     }
@@ -283,7 +286,7 @@ class CliCtx {
           let flag: CliCtxFlag = map2Cmds.get(cmd);
           if (flag.isFlag()) {
             this.map.set(cmd, new CliCtxArg(flag));            
-          } else if (args.length < i + 1) {
+          } else if (i + 1 < args.length) {
             let arg = args[i + 1];
             i++;
             this.map.set(cmd, new CliCtxArg(flag, arg)); 
@@ -334,6 +337,18 @@ class CliCtx {
   }
   getHome(): string { return this.home; }
   isDone(): boolean { return this.done; }
+  setPath(): void { 
+    let arg: CliCtxArg = this.map.get(PATH.cmd);
+    if (arg == undefined) {
+      throw Error("A --path argument is required, currently use --path `pwd`, and note the backticks.");
+    } else {
+      if (IS_WINDOWS) {
+        this.home = Paths.toUnix(this.map.get(PATH.cmd).getArg()); 
+      } else {
+        this.home = this.map.get(PATH.cmd).getArg(); 
+      }
+    }
+  }
 }
 
 export interface I_DependencySLinkGroup {
@@ -425,9 +440,12 @@ export class DependencySrcSLink {
 const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
   "\t\tdetails are here;\n" +
   "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
-let flags: I_CliCtxFlag[] = [DEFAULT, HELP, VERSION];
+  const PATH: I_CliCtxFlag = {cmd: "path", description: "A required parameter passing the current working directory to the application, \n" +
+    "conventionally through --path `pwd`.  Note the Backticks.", flag: false, letter: "p"}
+let flags: I_CliCtxFlag[] = [DEFAULT, HELP, PATH, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
+  ctx.setPath();
   let currentPkgJson = ctx.getHome() + '/package.json';
   let currentPkgJsonOs =  Paths.toOsPath(currentPkgJson);
   out('reading ' + currentPkgJsonOs);
@@ -463,4 +481,4 @@ if (!ctx.isDone()) {
     }
   }
 }
-//console.log('CliArgParser created with home\n\t' + ctx.getHome());
+console.log('CliArgParser created with home\n\t' + ctx.getHome());

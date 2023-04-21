@@ -7,6 +7,14 @@ To install slink run the following command;
 npm install -g @ts.adligo.org/slink
 ```
 
+## Run slink
+The following commands include the suggested usage from GitBash.
+```
+slink --version
+slink --help
+slink --path `pwd`
+```
+
 ## dependencySLinks 
 These are the simplest links you can store in your package.json file.  By default they will link
 to another project checked out in the same folder as the current project.  Also by default slink will place a symbolic link named &lt;project_name&gt;@slink in your source folder.
