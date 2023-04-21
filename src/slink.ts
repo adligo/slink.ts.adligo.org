@@ -457,6 +457,11 @@ if (!ctx.isDone()) {
     for (var i=0; i < slinks.length; i++) {
       let dl = new DependencySrcSLink(slinks[i], ctx);
       out(dl.toString());
+      let currentSlink : string = dl.getIn() + '/' + dl.getName();
+      let currentSlinkOs : string = Paths.toOsPath(currentSlink);
+      out('Deleting slink @ ' + currentSlinkOs);
+      Rm.forceRecursive(currentSlinkOs);
+
       Ln.st(dl.getTo(), dl.getName(), Paths.toOsPath(dl.getIn()));
     }
   }
