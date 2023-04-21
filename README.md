@@ -15,15 +15,19 @@ slink --help
 slink --path `pwd`
 ```
 
-## dependencySLinks 
-These are the simplest links you can store in your package.json file.  By default they will link
+## dependencySrcSLinks 
+These are the fastest and simplest links you can store in your package.json file.  By default they will link
 to another project checked out in the same folder as the current project.  Also by default slink will place a symbolic link named &lt;project_name&gt;@slink in your source folder.
 
 In Example, under the root package.json object add the attribute;
 ```
   "dependencySrcSLinks": [{
-    "project": "io.ts.adligo.org"
+    "project": "i_io.ts.adligo.org"
   }],
+```
+Then import the code in your TypeScript file;
+```
+  import {I_Out} from './i_io.ts.adligo.org@slink/i_io.mjs';
 ```
 
 ## dependencySLinkGroups
