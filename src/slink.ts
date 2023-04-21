@@ -481,4 +481,4 @@ if (!ctx.isDone()) {
     }
   }
 }
-console.log('CliArgParser created with home\n\t' + ctx.getHome());
+//console.log('CliArgParser created with home\n\t' + ctx.getHome());
