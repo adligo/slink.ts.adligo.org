@@ -10,8 +10,10 @@ npm install -g @ts.adligo.org/slink
 ## Run slink
 The following commands include the suggested usage from GitBash.
 ```
+slink --debug
 slink --version
 slink --help
+slink
 slink --path `pwd`
 ```
 
