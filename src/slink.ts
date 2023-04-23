@@ -19,8 +19,16 @@ const fs = require('node:fs');
 const { spawnSync } = require('child_process')
 const { stream } = require('stream'); 
 import {I_Out} from '@ts.adligo.org/io';
+import { SpawnSyncReturns } from 'child_process';
 
 const IS_WINDOWS = process.platform === "win32";
+function getPathSeperator() {
+  if (IS_WINDOWS) {
+    return '\\';
+  } else {
+    return '/';
+  }
+}
 const out : I_Out = (foo) => console.log(foo);
 
 /**
@@ -82,36 +90,91 @@ export class CliCtxArg {
   getFlag(): CliCtxFlag { return this.flag}
 }
 
-
 export class Paths {
-  /**
-   * 
-   * @param path a fully qualified path
-   * @returns 
-   */
-  static toUnix(path: string): string {
-    var r = '';
-    if (path.length > 3) {
-      if (path.charAt(1) == ':') {
-        r = '/c/';
-        for (var i=3; i< path.length; i++) {
-          let c = path[i];
-          if (c == '\\') {
-            r = r.concat('/');
-          } else {
-            r = r.concat(c);
-          }
-        }
-      } else {
-        //assume unix path already!
-        return path;
+ 
+  static find(parts: string[], relativePath: string[]): string[] {
+    var dd : number = 0;
+    for (var i=0; i< relativePath.length; i++) {
+      if (relativePath[i] == '..') {
+        dd++;
       }
-    } else {
-      throw Error("Unable to parse paths of length 3 or smaller!");
-    }
+    } 
+    console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
+    let root = parts.slice(0, parts.length - dd);
+    console.log('Root is: ' + root);
+    var r = root;
+    for (var i=0; i< relativePath.length; i++) {
+      if (relativePath[i] != '..') {
+        r = r.concat(relativePath[i]);
+      }
+    } 
+    console.log('New relative path is\n\t' + r);
     return r;
   }
 
+  static findPath(path: string, relativePath: string[]): string[] {
+    return this.find(this.toParts(path), relativePath);
+  }
+
+  static toOsPath(path: string): string {
+    let parts = this.toParts(path);
+    if (IS_WINDOWS) {
+      return this.toWindowsPath(parts);
+    } else {
+      return this.toUnixPath(parts);
+    }
+  }
+ 
+  
+   /**
+   * @param a path, which could be 
+   * a windows path (i.e. C:\User\scott ), 
+   * a unix path (/home/scott)
+   * or a gitbash path (i.e. C:/Users/scott)
+   * Because of this spaces are NOT allowed.
+   */
+  static toParts(path: string): string[] {
+    let r: string[] = new Array();
+    let b = '';
+    var j = 0;
+    var i=0; 
+    var winPath: boolean = false;
+    if (path.length >= 1) {
+      if (path.charAt(1) == ':') {
+        //it's a windows path
+        r[0] = path.charAt(0);
+        j++;
+        i = 3;
+        winPath = true;
+      } 
+    }
+    for (; i< path.length; i++) {
+      let c = path[i];
+      if (c == '\\') {
+        if (b.length != 0) {
+          r[j] = b;
+          b = '';
+          j++;
+        }
+      } else if (c == '/') {
+        if (b.length != 0) {
+          r[j] = b;
+          b = '';
+          j++;
+        }
+      } else if (c == ' ') {
+        throw Error('Spaces are NOT allowed in paths, due to portability issues.  The following path is invaid;\n\t' + path)
+      } else {
+        b = b.concat(c);
+      }
+    }
+    r[j] = b;
+    return r;
+  }
+
+  static toUnix(path: string): string {
+    return this.toUnixPath(this.toParts(path));
+  }
   static toUnixPath(parts: string[]): string {
     let b = '/';
     for (var i=0; i < parts.length; i++) {
@@ -128,7 +191,11 @@ export class Paths {
     let b = '';
     for (var i=0; i < parts.length; i++) {
       if (i == 0) {
-        b = parts[0].toUpperCase() + ':\\';
+        if (parts[0].length == 1) {
+          b = parts[0].toUpperCase() + ':\\';
+        } else {
+          b = parts[0].concat('\\');
+        }
       } else if (i == parts.length -1) {
         b = b.concat(parts[i]);
       } else {
@@ -137,97 +204,16 @@ export class Paths {
     }
     return b;
   }
-
-  static toOsPath(path: string): string {
-    let parts = this.toParts(path);
-    if (IS_WINDOWS) {
-      return this.toWindowsPath(parts);
-    } else {
-      return this.toUnixPath(parts);
-    }
-  }
-  /**
-   * 
-   * @param unixPath a fully qualified path
-   */
-  static toParts(unixPath: string): string[] {
-    let r: string[] = new Array();
-    let b = '';
-    var j = 0;
-    if (unixPath.charAt(0) != '/') {
-      throw Error('The following unixPath is not a fully qualified path!;\n' + unixPath);
-    }
-    for (var i=1; i< unixPath.length; i++) {
-      let c = unixPath[i];
-      if (c == '/') {
-        if (b.length != 0) {
-          r[j] = b;
-          b = '';
-          j++;
-        }
-      } else {
-        b = b.concat(c);
-      }
-    }
-    r[j] = b;
-    return r;
-  }
 }
 
-const UnixCmdError1 = 'Unable to run the UNIX ';
-const UnixCmdError2 = ' command!\nIf your running on Windows try using GitBash to run this program!\n';
-
-export class Ln {
-  static st(from: string, name: string, workingDir: string) {
-    try {
-      let ln = spawnSync('ln',['-s', '-T', from, name], { cwd: workingDir });
-      var lnout = "" + ln.output;
-      //console.log('pwd output is ' + pwd.output);
-      if ('null' == lnout) {
-        throw Error('The output from ln is ' + lnout);
-      }
-    } catch (e) {
-      throw Error(UnixCmdError1 + 'ln' + UnixCmdError2 + e);
-    }
-  }
-}
-
-export class Mkdir {
-  static mkdir(dir: string) {
-    try {
-      let mkdir = spawnSync('mkdir',[dir]);
-      var out = "" + mkdir.output;
-      //console.log('pwd output is ' + pwd.output);
-      if ('null' == out) {
-        throw Error('The output from mkdir ' + dir + ' is ' + out);
-      }
-    } catch (e) {
-      throw Error(UnixCmdError1 + 'mkdir' + UnixCmdError2 + e);
-    }
-  }
-}
-
-export class Rm {
-  static forceRecursive(dir: string) {
-    try {
-      let rm = spawnSync('rm',['-fr', dir]);
-      var rmout = "" + rm.output;
-      //console.log('pwd output is ' + pwd.output);
-      if ('null' == rmout) {
-        throw Error('The output from rm -fr ' + dir + ' is ' + rmout);
-      }
-    } catch (e) {
-      throw Error(UnixCmdError1 + 'rm' + UnixCmdError2 + e);
-    }
-  }
-}
 const DEBUG: I_CliCtxFlag = {cmd: "debug", description: "Displays debugging information about htis program.", flag: true}
 const HELP: I_CliCtxFlag = {cmd: "help", description: "Displays the Help Menu, prints this output."}
 const VERSION: I_CliCtxFlag = {cmd: "version", description: "Displays the version.", flag: true, letter: "v"}
 
 class CliCtx {
   private done: boolean = false;
-  private path: string;
+  private dir: string;
+  private i_out: I_Out;
   private home: string;
   private map: Map<string, CliCtxArg> = new Map();
 
@@ -241,9 +227,6 @@ class CliCtx {
    * @param out 
    */
   constructor(flags: I_CliCtxFlag[], args?: string [], belowRoot?: number, out?: I_Out) {
-    //this.path = path.resolve('.');
-    //this.path = process.mainModule.filename;
-    this.path = __dirname;
     if (args == undefined) {
       args = process.argv;
     }
@@ -253,6 +236,7 @@ class CliCtx {
     if (out == undefined) {
       out = (message) => console.log(message);
     }
+    this.i_out = out;
     let allFlags: CliCtxFlag[] = new Array(flags.length);
     let map2Cmds: Map<string, CliCtxFlag> = new Map();
     let map2Letters: Map<string, CliCtxFlag> = new Map();
@@ -336,37 +320,96 @@ class CliCtx {
       this.done = true;
     }
   }
+  getDir(): string { return this.dir; }
   getHome(): string { return this.home; }
+  isBash(): boolean { 
+    if (this.map.has(DEBUG.cmd)) {
+      out('process.env.SHELL is ' + process.env.SHELL);
+    }
+    if (process.env.SHELL != undefined) {
+      if (process.env.SHELL.toLocaleLowerCase().includes('bash')) {
+        return true;
+      }
+    }
+    return false;
+  }
+  isDebug(): boolean { return this.map.has(DEBUG.cmd); }
   isDone(): boolean { return this.done; }
-  setPath(): void { 
-    let arg: CliCtxArg = this.map.get(PATH.cmd);
+  isWindows(): boolean { return IS_WINDOWS; }
+  
+  
+  run(cmd: string, args: string[], ctx: CliCtx, options?: any): SpawnSyncReturns<Buffer> {
+    var cc = cmd;
+    if (args != undefined) {
+      for (var i=0; i < args.length; i++) {
+        cc = cc + ' ' + args[i];
+      }
+    }
+    return this.logCmd(cc, spawnSync(cmd, args, options), ctx, options);
+  }
+  out(message: string) { console.log(message); }
+  setDir(): void { 
+    let arg: CliCtxArg = this.map.get(DIR.cmd);
+    var dir: string = process.cwd();
     if (arg == undefined) {
       if (this.map.has('debug')) {
         out('process.env is ' + JSON.stringify(process.env));
       }
-      let pwd: string = process.env.PWD;
-     if (this.map.has('debug')) {
-        out('process.env.PWD is ' + pwd);
+      if (process.env.PWD != undefined) {
+        var dir: string = process.env.PWD;
+        if (this.map.has('debug')) {
+          out('process.env.PWD is ' + dir);
+        }
       }
-      if (pwd != undefined) {
-        if (IS_WINDOWS) {
-          this.home = Paths.toUnix(pwd); 
-        } else {
-          this.home = pwd; 
-        }      
+      if (dir == undefined) {
+        throw Error('Unable to determine the current working directory, please specify it with --dir <someFolder/>');
+      } 
+    } else {
+      dir = this.map.get(DIR.cmd).getArg(); 
+    }
+    if (this.map.has('debug')) {
+      out('before toOsPath CliCtx.dir is ' + dir);
+    }
+    this.dir = Paths.toOsPath(dir);
+    if (this.map.has('debug')) {
+      out('after toOsPath CliCtx.dir is ' + this.dir);
+    }
+  }
+ 
+  private logCmd(cmdWithArgs: string, spawnSyncReturns: SpawnSyncReturns<Buffer>, ctx: CliCtx, options?: any ): SpawnSyncReturns<Buffer> {
+    out('ran ' + cmdWithArgs  );
+    if (options != undefined) {
+      if (options.cwd != undefined) {
+        out('\tin ' + options.cwd);
       } else {
-        throw Error("A --path argument is required, currently use --path `pwd`, and note the backticks.");
+        out('\tin ' + ctx.getDir());
       }
     } else {
-      if (IS_WINDOWS) {
-        this.home = Paths.toUnix(this.map.get(PATH.cmd).getArg()); 
-      } else {
-        this.home = this.map.get(PATH.cmd).getArg(); 
-      }
+      out('\tin ' + ctx.getDir());
     }
+    out('\tand the spawnSyncReturns had;');
+    if (spawnSyncReturns.error != undefined) {
+      out('\tError: ' + spawnSyncReturns.error);
+      out('\t\t' + spawnSyncReturns.error.message);
+    }  
+    if (spawnSyncReturns.stderr != undefined) {
+      out('\tStderr: ' + spawnSyncReturns.stderr);
+    }
+    if (spawnSyncReturns.stdout != undefined) {
+      out('\tStdout: ' + spawnSyncReturns.stdout);
+    }
+    return spawnSyncReturns;
   }
 }
 
+export class FsContext {
+  private cliCtx: CliCtx;
+
+  constructor(cliCtx: CliCtx) {
+    this.cliCtx = cliCtx;
+  }
+
+}
 export interface I_DependencySLinkGroup {
   group: string;
   projects: I_DependencySLinkProject[];
@@ -412,7 +455,7 @@ export class DependencySLinkProject {
 
   getProjectName(): string { return this.project; }
   getModluePath(): string { return this.modulePath; }
-  getTo(): string { return this.unixTo; }
+  getUnixTo(): string { return this.unixTo; }
 
   toString(): string {
     return 'DependencySLinkProject [project=\'' + this.project + '\', modulePath=\'' +
@@ -434,9 +477,9 @@ export class DependencySrcSLink {
   constructor(slink: I_DependencySrcSLink, ctx: CliCtx) {
     this.name =slink.project + '@slink';
     if (slink.destPath == undefined) {
-      this.unixIn = ctx.getHome() + '/src';
+      this.unixIn = 'src';
     } else {
-      this.unixIn = ctx.getHome() + slink.destPath;
+      this.unixIn = slink.destPath;
     }
     if (slink.srcPath == undefined) {
       this.unixTo  = '../../' + slink.project + '/src';
@@ -444,9 +487,9 @@ export class DependencySrcSLink {
       this.unixTo  = '../../' + slink.project + slink.srcPath;
     }
   }
-  getIn(): string { return this.unixIn;}
+  getUnixIn(): string { return this.unixIn;}
   getName(): string { return this.name; }
-  getTo(): string { return this.unixTo; }
+  getUnixTo(): string { return this.unixTo; }
   toString(): string {
     return 'DependencySLink [name=\'' + this.name + '\', unixIn=\'' + this.unixIn +
       '\', unixTo=\'' + this.unixTo + '\']';
@@ -456,49 +499,123 @@ export class DependencySrcSLink {
 const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
   "\t\tdetails are here;\n" +
   "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
-  const PATH: I_CliCtxFlag = {cmd: "path", description: "A required parameter passing the current working directory to the application, \n" +
-    "conventionally through --path `pwd`.  Note the Backticks.", flag: false, letter: "p"}
-let flags: I_CliCtxFlag[] = [DEBUG, DEFAULT, HELP, PATH, VERSION];
+const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
+    "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
+let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, HELP, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
-  ctx.setPath();
-  let currentPkgJson = ctx.getHome() + '/package.json';
-  let currentPkgJsonOs =  Paths.toOsPath(currentPkgJson);
+  ctx.setDir();
+  let currentPkgJson = ctx.getDir() + getPathSeperator() + 'package.json';
+  //console.log('looking at ' + currentPkgJson);
+  if (currentPkgJson.length >= 20) {}
+    let slinkHomeCheck = currentPkgJson.substring(currentPkgJson.length - 20, currentPkgJson.length);
+    //console.log('slinkHomeCheck ' + slinkHomeCheck);
+    if ('/slink/package.json' == currentPkgJson) {
+      throw Error('The current working directory is coming from the slink installation,' +
+        'please set the current working directory using --dir <someDirectory/>.');
+    }
+  let currentPkgJsonOs =  currentPkgJson;
   out('reading ' + currentPkgJsonOs);
   let json = JSON.parse(fs.readFileSync(currentPkgJsonOs));
   var slinks : I_DependencySrcSLink[] = json.dependencySrcSLinks;
+  var foundSrcSlinks : boolean = false;
   if (slinks == undefined || slinks.length == 0) {
-    out('No dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
   } else {
+    foundSrcSlinks = true;
     for (var i=0; i < slinks.length; i++) {
       let dl = new DependencySrcSLink(slinks[i], ctx);
       out(dl.toString());
-      let currentSlink : string = dl.getIn() + '/' + dl.getName();
-      let currentSlinkOs : string = Paths.toOsPath(currentSlink);
-      out('Deleting slink @ ' + currentSlinkOs);
-      Rm.forceRecursive(currentSlinkOs);
+      let unixIn: string[] = Paths.toParts(dl.getUnixIn());
+      //console.log('unix in is ' + unixIn)
+      let unixTo: string[] = Paths.toParts(dl.getUnixTo());
+      //console.log('unix to is ' + unixTo)
+      let slinkIn: string[] = Paths.findPath(ctx.getDir(), unixIn);
+      let slinkTo: string[] = Paths.find(slinkIn, unixTo);
 
-      Ln.st(dl.getTo(), dl.getName(), Paths.toOsPath(dl.getIn()));
+
+      if (ctx.isWindows()) {
+          //existsSync s broken!
+
+          if (ctx.isBash()) {
+            let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnixPath(slinkIn.concat(dl.getName()))], ctx);
+            if (ssr.output.toString().includes('No such file or directory')) {
+
+              ctx.run('rm',['-fr', dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)})
+            }
+          } else {
+            ctx.run('rmdir',['/s', dl.getName()], ctx, { cwd: Paths.toWindowsPath(slinkIn)})
+          }
+      } else {
+        if ( fs.existsSync(dl.getName(), { cwd: Paths.toUnixPath(slinkIn)})) {
+          ctx.run('rm',['-fr',dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)})
+        }
+      }
+
+      if (ctx.isWindows()) {
+        if (ctx.isBash()) {
+          ctx.run('ln',['-s', '-T', Paths.toUnixPath(slinkTo),dl.getName()], ctx, { cwd: Paths.toWindowsPath(slinkIn)});
+        } else {
+          ctx.run('mklink ', ['/J', dl.getName(), Paths.toWindowsPath(slinkTo)], ctx, { cwd: Paths.toWindowsPath(slinkIn)});
+        }
+      } else {
+        ctx.run('ln',['-s', '-T',  Paths.toUnixPath(slinkTo),dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)});
+      }
     }
   }
 
   var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
+  var foundSLinkGroups : boolean = false;
   if (linkGroups == undefined || linkGroups.length == 0) {
-    out('No dependencySLinkGroups found in \n\t' + currentPkgJsonOs);
   } else {
     for (var i=0; i < linkGroups.length; i++) {
+      foundSLinkGroups = true;
       let g = new DependencySLinkGroup(linkGroups[i], ctx);
       let gdir = 'node_modules/' + g.getGroup();
       out('Deleting ' + gdir);
-      Rm.forceRecursive(gdir);
+      if (ctx.isWindows()) {
+        if (ctx.isBash()) {
+          ctx.run('rm',['-fr', Paths.toUnix(gdir)], ctx)
+        } else {
+          ctx.run('rmdir',['/s', Paths.toOsPath(gdir)], ctx)
+        }
+      } else {
+        ctx.run('rm',['-fr', Paths.toOsPath(gdir)], ctx)
+      }
       out('Creating ' + gdir);
-      Mkdir.mkdir(gdir);
+      if (ctx.isWindows()) {
+        if (ctx.isBash()) {
+          ctx.run('mkdir',[Paths.toUnix(gdir)], ctx);
+        } else {
+          ctx.run('mkdir',[Paths.toOsPath(gdir)], ctx);
+        }
+      } else {
+        ctx.run('mkdir',[Paths.toOsPath(gdir)], ctx);
+      }
+
       let inDir = Paths.toOsPath(g.getIn());
       out('Linking in ' + inDir);
       g.getProjects().forEach((p) => {
         out(p.toString());
-        Ln.st(p.getTo(), p.getModluePath(), inDir);
+        if (ctx.isWindows()) {
+          if (ctx.isBash()) {
+            ctx.run('ln',['-s', '-T', Paths.toUnix(p.getUnixTo()), Paths.toUnix(p.getModluePath())], ctx);
+          } else {
+            ctx.run('mklink ', ['/J', Paths.toOsPath(p.getUnixTo()), Paths.toOsPath(p.getModluePath())], ctx);
+          }
+        } else {
+          ctx.run('ln',['-s', '-T', Paths.toOsPath(p.getUnixTo()), Paths.toOsPath(p.getModluePath())], ctx);
+        }
       });
+    }
+  }
+
+  if (!foundSLinkGroups || !foundSrcSlinks) {
+    if (!foundSLinkGroups && !foundSrcSlinks) {
+      out('No dependencySLinkGroups or dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
+    } else if (!foundSLinkGroups) {
+      out('No dependencySLinkGroups found in \n\t' + currentPkgJsonOs);
+    } else {
+      out('No dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
     }
   }
 }
