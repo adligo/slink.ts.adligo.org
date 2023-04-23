@@ -1,8 +1,7 @@
 {
   "author": "Scott Morgan",
   "bin": {
-    "slink": "./dist/slink.js",
-    "slink2": "export CWD=`pwd`; echo $CWD"
+    "slink": "./dist/slink.js"
   },
   "bugs": {
     "url": "https://github.com/adligo/slink.ts.adligo.org/issues"
@@ -49,5 +48,5 @@
     "tsc": "tsc"
   },
   "type": "commonjs",
-  "version": "1.0.7"
+  "version": "1.0.8"
 }

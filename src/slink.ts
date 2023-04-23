@@ -221,6 +221,7 @@ export class Rm {
     }
   }
 }
+const DEBUG: I_CliCtxFlag = {cmd: "debug", description: "Displays debugging information about htis program.", flag: true}
 const HELP: I_CliCtxFlag = {cmd: "help", description: "Displays the Help Menu, prints this output."}
 const VERSION: I_CliCtxFlag = {cmd: "version", description: "Displays the version.", flag: true, letter: "v"}
 
@@ -340,7 +341,22 @@ class CliCtx {
   setPath(): void { 
     let arg: CliCtxArg = this.map.get(PATH.cmd);
     if (arg == undefined) {
-      throw Error("A --path argument is required, currently use --path `pwd`, and note the backticks.");
+      if (this.map.has('debug')) {
+        out('process.env is ' + JSON.stringify(process.env));
+      }
+      let pwd: string = process.env.PWD;
+     if (this.map.has('debug')) {
+        out('process.env.PWD is ' + pwd);
+      }
+      if (pwd != undefined) {
+        if (IS_WINDOWS) {
+          this.home = Paths.toUnix(pwd); 
+        } else {
+          this.home = pwd; 
+        }      
+      } else {
+        throw Error("A --path argument is required, currently use --path `pwd`, and note the backticks.");
+      }
     } else {
       if (IS_WINDOWS) {
         this.home = Paths.toUnix(this.map.get(PATH.cmd).getArg()); 
@@ -442,7 +458,7 @@ const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in no
   "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
   const PATH: I_CliCtxFlag = {cmd: "path", description: "A required parameter passing the current working directory to the application, \n" +
     "conventionally through --path `pwd`.  Note the Backticks.", flag: false, letter: "p"}
-let flags: I_CliCtxFlag[] = [DEFAULT, HELP, PATH, VERSION];
+let flags: I_CliCtxFlag[] = [DEBUG, DEFAULT, HELP, PATH, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
   ctx.setPath();

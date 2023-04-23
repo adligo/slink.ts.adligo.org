@@ -15,6 +15,6 @@
   "exclude": ["node_modules", "**/*.spec.ts"],
   "ts-node": {
     "esm": true,
-    "experimentalSpecifierResolution": "node",
+    "experimentalSpecifierResolution": "node"
     }
  }
