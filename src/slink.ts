@@ -90,39 +90,103 @@ export class CliCtxArg {
   getFlag(): CliCtxFlag { return this.flag}
 }
 
+export class Path {
+  private relative: boolean;
+  private parts: string[];
+  private windows: boolean;
+
+  constructor(parts: string[], relative?: boolean, windows?: boolean) {
+    if (relative == undefined) {
+      this.relative = false;
+    } else {
+      this.relative = relative;
+    }
+    this.parts = parts;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] == undefined) {
+        throw Error('Parts must have valid strings! ' + parts);
+      }
+    }
+    if (windows == undefined) {
+      this.windows = false;
+    } else {
+      this.windows = windows;
+    }
+  }
+
+  isRelative(): boolean  { return this.relative; }
+  isWindows(): boolean { return this.windows; }
+  getParts(): string[] { return this.parts.slice(0, this.parts.length ); }
+  toString(): string { return 'Path [parts=' + this.parts + ', relative=' + this.relative + ', windows=' + this.windows + ']'}
+  toPathString(): string {
+    var r : string = '';
+    if  (this.windows) {
+      if (this.relative) {
+        r = r.concat(this.parts[0] + '\\');
+        return this.concat(r, '\\');
+      } else {
+        r = r.concat(this.parts[0] + ':\\');
+        return this.concat(r, '\\');
+      }
+    } else {
+      if (this.relative) {
+        return this.concat(r, '/');
+      } else {
+        r = r.concat('/');
+        return this.concat(r, '/');
+      }
+    }
+  }
+
+  private concat(start: string, sep: string ): string {
+    for (var i = 1; i < this.parts.length; i++) {
+      if (this.parts.length -1 == i) {
+        start = start.concat(this.parts[i]);
+      } else {
+        start = start.concat(this.parts[i]).concat(sep);
+      }
+    }
+    return start;
+  }
+}
 export class Paths {
  
-  static find(parts: string[], relativePath: string[]): string[] {
+  static find(parts: Path, relativePath: Path): Path{
     var dd : number = 0;
-    for (var i=0; i< relativePath.length; i++) {
-      if (relativePath[i] == '..') {
+    let rpp: string[] = relativePath.getParts();
+    for (var i=0; i< rpp.length; i++) {
+      if (rpp[i] == '..') {
         dd++;
       }
     } 
+    let pp: string[] = parts.getParts();
     console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
-    let root = parts.slice(0, parts.length - dd);
+    let root = pp.slice(0, pp.length - dd);
     console.log('Root is: ' + root);
     var r = root;
-    for (var i=0; i< relativePath.length; i++) {
-      if (relativePath[i] != '..') {
-        r = r.concat(relativePath[i]);
+    for (var i=0; i< rpp.length; i++) {
+      if (rpp[i] != '..') {
+        r = r.concat(rpp[i]);
       }
     } 
     console.log('New relative path is\n\t' + r);
-    return r;
+    return new Path(r, false);
   }
 
-  static findPath(path: string, relativePath: string[]): string[] {
-    return this.find(this.toParts(path), relativePath);
+  static findPath(path: string, relativePath: Path): Path {
+    return this.find(this.toParts(path, false), relativePath);
+  }
+
+  static toOs(parts: Path): string {
+    if (IS_WINDOWS) {
+      return this.toWindows(parts);
+    } else {
+      return this.toUnix(parts);
+    }
   }
 
   static toOsPath(path: string): string {
-    let parts = this.toParts(path);
-    if (IS_WINDOWS) {
-      return this.toWindowsPath(parts);
-    } else {
-      return this.toUnixPath(parts);
-    }
+    return this.toOs(this.toParts(path, false));
   }
  
   
@@ -133,7 +197,7 @@ export class Paths {
    * or a gitbash path (i.e. C:/Users/scott)
    * Because of this spaces are NOT allowed.
    */
-  static toParts(path: string): string[] {
+  static toParts(path: string, relative: boolean ): Path{
     let r: string[] = new Array();
     let b = '';
     var j = 0;
@@ -169,40 +233,56 @@ export class Paths {
       }
     }
     r[j] = b;
-    return r;
-  }
-
-  static toUnix(path: string): string {
-    return this.toUnixPath(this.toParts(path));
-  }
-  static toUnixPath(parts: string[]): string {
-    let b = '/';
-    for (var i=0; i < parts.length; i++) {
-      if (i == parts.length - 1) {
-        b = b.concat(parts[i]);
-      } else {
-        b = b.concat(parts[i]).concat('/');
-      }
+    if (relative == undefined) {
+      return new Path(r, false);
+    } else if (relative) {
+      return new Path(r, relative);
+    } else {
+      return new Path(r, relative);
     }
-    return b;
   }
 
-  static toWindowsPath(parts: string[]): string {
+  static toUnix(parts: Path): string {
     let b = '';
-    for (var i=0; i < parts.length; i++) {
-      if (i == 0) {
-        if (parts[0].length == 1) {
-          b = parts[0].toUpperCase() + ':\\';
-        } else {
-          b = parts[0].concat('\\');
-        }
-      } else if (i == parts.length -1) {
-        b = b.concat(parts[i]);
+    if ( !parts.isRelative()) {
+      b = '/';
+    }
+    let pp: string[] = parts.getParts();
+    for (var i=0; i < pp.length; i++) {
+      let p = pp[i];
+      if (i == pp.length - 1) {
+        b = b.concat(p);
       } else {
-        b = b.concat(parts[i]).concat('\\');
+        b = b.concat(p).concat('/');
       }
     }
     return b;
+  }
+  static toUnixPath(path: string): string {
+    return this.toUnix(this.toParts(path, false));
+  }
+
+
+  static toWindows(parts: Path): string {
+    let b = '';
+    let pp: string [] = parts.getParts();
+    for (var i=0; i < pp.length; i++) {
+      if (i == 0) {
+        if (pp[0].length == 1) {
+          b = pp[0].toUpperCase() + ':\\';
+        } else {
+          b = pp[0].concat('\\');
+        }
+      } else if (i == pp.length -1) {
+        b = b.concat(pp[i]);
+      } else {
+        b = b.concat(pp[i]).concat('\\');
+      }
+    }
+    return b;
+  }
+  static toWindowsPath(parts: string): string {
+    return this.toWindows(this.toParts(parts, false));
   }
 }
 
@@ -212,9 +292,17 @@ const VERSION: I_CliCtxFlag = {cmd: "version", description: "Displays the versio
 
 class CliCtx {
   private done: boolean = false;
-  private dir: string;
+  /**
+   * This is the current working directory of your shell, if possible
+   * sometime you need to pass it in.
+   */
+  private dir: Path;
   private i_out: I_Out;
-  private home: string;
+  /**
+   * this is the home directory where your application is installed,
+   * in the npm shared space of your computer
+   */
+  private home: Path;
   private map: Map<string, CliCtxArg> = new Map();
 
   /**
@@ -254,9 +342,7 @@ class CliCtx {
         map2Letters.set(f.getLetter(), f);
       }
     }
-    this.home = Paths.toUnix(args[1]);
-    let homeParts: string[] = Paths.toParts(this.home);
-    this.home = Paths.toUnixPath(homeParts.slice(0, homeParts.length - belowRoot))
+    this.home = Paths.toParts(args[1], false);
     for (var i=2; i< args.length; i++) {
       let a = args[i];
       //out('processing cli arg ' + a);
@@ -308,20 +394,18 @@ class CliCtx {
       }
       this.done = true;
     } else if (this.map.get(VERSION.cmd)) {
-      let homePkgJsonName = this.home + '/package.json';
-      //out('Got homePkgJsonName ' + homePkgJsonName);
-      let homePkgJson =  Paths.toOsPath(homePkgJsonName);
+      let homePkgJsonName: Path = new Path(this.home.getParts().concat('package.json'));
+
+      let fsc: FsContext = new FsContext(this);
       //out('Got homePkgJson ' + homePkgJson + ' fs is ' + fs);
-      let json = fs.readFileSync(homePkgJson);
-      //out('Got JSON string ' + json);
-      let jObj = JSON.parse(json);
+      let jObj = fsc.readJson(homePkgJsonName);
       //out('Got JSON ' + jObj);
       out(jObj.version);
       this.done = true;
     }
   }
-  getDir(): string { return this.dir; }
-  getHome(): string { return this.home; }
+  getDir(): Path { return this.dir; }
+  getHome(): Path { return this.home; }
   isBash(): boolean { 
     if (this.map.has(DEBUG.cmd)) {
       out('process.env.SHELL is ' + process.env.SHELL);
@@ -347,7 +431,17 @@ class CliCtx {
     }
     return this.logCmd(cc, spawnSync(cmd, args, options), ctx, options);
   }
-  out(message: string) { console.log(message); }
+  /**
+   * Checks if the context is set to debug 
+   * and if so prints the message, if you want to print regarless use print
+   * @param message 
+   */
+  out(message: string) {
+    if (this.map.has(DEBUG.cmd)) {
+      console.log(message); 
+    }
+  }
+  print(message: string) {console.log(message);  }
   setDir(): void { 
     let arg: CliCtxArg = this.map.get(DIR.cmd);
     var dir: string = process.cwd();
@@ -370,9 +464,9 @@ class CliCtx {
     if (this.map.has('debug')) {
       out('before toOsPath CliCtx.dir is ' + dir);
     }
-    this.dir = Paths.toOsPath(dir);
+    this.dir = Paths.toParts(dir, false);
     if (this.map.has('debug')) {
-      out('after toOsPath CliCtx.dir is ' + this.dir);
+      out('after toOsPath CliCtx.dir is ' + this.dir.toString());
     }
   }
  
@@ -403,12 +497,133 @@ class CliCtx {
 }
 
 export class FsContext {
-  private cliCtx: CliCtx;
+  private ctx: CliCtx;
 
   constructor(cliCtx: CliCtx) {
-    this.cliCtx = cliCtx;
+    this.ctx = cliCtx;
   }
 
+  exists(relativePathParts: Path, inDir: Path): boolean {
+    if (ctx.isWindows()) {
+      //existsSync s broken! for symblic links at least, this is clugy hack
+      if (ctx.isBash()) {
+        let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(relativePathParts)], ctx, 
+          { cwd: Paths.toWindows(inDir)});
+        if (ssr.error != undefined) {
+          //assume an error is a failure
+          return false;
+        } else if (ssr.output != undefined) {
+          if (ssr.output.toString().includes('No such file or directory')) {
+            return false;
+          }
+        }
+        return true;
+      } else {
+        let ssr: SpawnSyncReturns<Buffer> = ctx.run('dir',[ Paths.toUnix(relativePathParts)], ctx, 
+          { cwd: Paths.toWindows(inDir)});
+        if (ssr.error != undefined ) {
+          //assume an error is a failure
+          return false;
+        } else if (ssr.output != undefined) {
+          if (ssr.output.toString().includes('No such file or directory')) {
+            return false;
+          }
+        }
+        return true;
+      }
+    } else {
+      let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(relativePathParts)], ctx, 
+        { cwd: Paths.toUnix(inDir)});
+      if (ssr.error != undefined ) {
+        //assume an error is a failure
+        return false;
+      }
+      return true;
+    }
+
+  }
+
+  mkdir(dir: string, inDir: Path) {
+    if (ctx.isWindows()) {
+      //existsSync s broken!
+      if (ctx.isBash()) {
+        ctx.run('mkdir',[dir], ctx, { cwd: Paths.toWindows(inDir)});
+      } else {
+        ctx.run('mkdir',[dir], ctx, { cwd: Paths.toWindows(inDir)});
+      }
+    } else {
+      ctx.run('mkdir',[dir], ctx, { cwd: Paths.toUnix(inDir)});
+    }
+  }
+
+  mkdirTree(dirs: Path, inDir: Path): Path {
+    var dirNames: string[] = dirs.getParts();
+    for (var i = 0; i< dirNames.length; i++) {
+      let dir: string = dirNames[i];
+      if (!this.exists(new Path([dir], true, inDir.isWindows()), inDir)) {
+        this.mkdir(dir, inDir);
+      }
+      inDir = new Path(inDir.getParts().concat(dir), false, inDir.isWindows());
+    }
+    return inDir;
+  }
+
+  read(path: Path, charset?: string): any {
+    try {
+      if (ctx.isWindows()) {
+        //don't use unix files for gitbash here
+        let p: string = Paths.toWindows(path);
+        if (ctx.isDebug()) {
+          ctx.out('reading ' + p);
+        }
+        return fs.readFileSync(p);
+      } else {
+        let p: string = Paths.toUnix(path);
+        if (ctx.isDebug()) {
+          ctx.out('reading ' + p);
+        }
+        return fs.readFileSync(p);
+      }
+    } catch (e) {
+      ctx.print('Error reading file ' + path.toString())
+      ctx.print(e.message);
+      throw e;
+    }
+  }
+
+  readJson(path: Path): any {
+    return JSON.parse(this.read(path));
+  }
+
+  rm(pathParts: Path, inDir: Path) {
+    if (this.exists(pathParts, inDir)) {
+      if (ctx.isWindows()) {
+        //existsSync s broken!
+        if (ctx.isBash()) {
+          ctx.run('rm',['-fr',Paths.toUnix(pathParts)], ctx, { cwd: Paths.toWindows(inDir)});
+        } else {
+          ctx.run('rmdir',['/s', Paths.toWindows(pathParts)], ctx, { cwd: Paths.toWindows(inDir)});
+        }
+      } else {
+        ctx.run('rm',['-fr',Paths.toUnix(pathParts)], ctx, { cwd: Paths.toUnix(inDir)});
+      }
+    }
+  }
+
+  /**
+   * create a new symbolic link
+   */
+  slink(slinkName: string, toDir: Path, inDir: Path) {
+    if (ctx.isWindows()) {
+      if (ctx.isBash()) {
+        ctx.run('ln',['-s', '-T', Paths.toUnix(toDir),slinkName], ctx, { cwd: Paths.toWindows(inDir)});
+      } else {
+        ctx.run('mklink ', ['/J', slinkName, Paths.toWindows(toDir)], ctx, { cwd: Paths.toWindows(inDir)});
+      }
+    } else {
+      ctx.run('ln',['-s', '-T',  Paths.toUnix(toDir),slinkName], ctx, { cwd: Paths.toUnix(inDir)});
+    }
+  }
 }
 export interface I_DependencySLinkGroup {
   group: string;
@@ -424,15 +639,17 @@ export class DependencySLinkGroup {
   private group: string;
   private projects: DependencySLinkProject[];
   private unixIn: string;
+  private unixTo: string;
 
   constructor(info: I_DependencySLinkGroup, ctx: CliCtx) {
     this.group = info.group;
     this.projects = DependencySLinkProject.to(this.group, info.projects, ctx);
-    this.unixIn = ctx.getHome() + '/node_modules/' + this.group;
+    this.unixIn = 'node_modules/' + this.group;
   }
   getGroup(): string { return this.group;}
   getProjects(): DependencySLinkProject[] { return this.projects;}
-  getIn(): string { return this.unixIn;}
+  getUnixIn(): string { return this.unixIn;}
+  getUnixTo(): string { return this.unixTo; }
 }
 
 export class DependencySLinkProject {
@@ -445,17 +662,17 @@ export class DependencySLinkProject {
   }
   private project: string;
   private modulePath: string;
-  private unixTo: string;
+  private unixTo: Path;
 
   constructor(group: string, info: I_DependencySLinkProject, ctx: CliCtx) {
     this.project = info.project;
     this.modulePath = info.modulePath;
-    this.unixTo = '../../../' + info.project;
+    this.unixTo = Paths.toParts('../../../' + info.project + '/src', true));
   }
 
   getProjectName(): string { return this.project; }
   getModluePath(): string { return this.modulePath; }
-  getUnixTo(): string { return this.unixTo; }
+  getUnixTo(): Path { return this.unixTo; }
 
   toString(): string {
     return 'DependencySLinkProject [project=\'' + this.project + '\', modulePath=\'' +
@@ -505,18 +722,30 @@ let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, HELP, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
   ctx.setDir();
-  let currentPkgJson = ctx.getDir() + getPathSeperator() + 'package.json';
+  let currentPkgJsonPath : Path = new Path(ctx.getDir().getParts().concat('package.json'), false, ctx.isWindows());
+  let currentPkgJson: string =  currentPkgJsonPath.toPathString();
   //console.log('looking at ' + currentPkgJson);
-  if (currentPkgJson.length >= 20) {}
+  if (currentPkgJson.length >= 20) {
     let slinkHomeCheck = currentPkgJson.substring(currentPkgJson.length - 20, currentPkgJson.length);
     //console.log('slinkHomeCheck ' + slinkHomeCheck);
     if ('/slink/package.json' == currentPkgJson) {
       throw Error('The current working directory is coming from the slink installation,' +
         'please set the current working directory using --dir <someDirectory/>.');
     }
-  let currentPkgJsonOs =  currentPkgJson;
-  out('reading ' + currentPkgJsonOs);
-  let json = JSON.parse(fs.readFileSync(currentPkgJsonOs));
+  }
+  out('reading ' + currentPkgJson);
+  out('\t' + currentPkgJsonPath.toString());
+  let fsCtx = new FsContext(ctx);
+  let json = fsCtx.readJson(currentPkgJsonPath);
+  if (ctx.isDebug()) {
+    //out('read ' + JSON.stringify(json));
+    if (json.dependencySrcSLinks != undefined) {
+      out('read ' + JSON.stringify(json.dependencySrcSLinks));
+    }
+    if (json.dependencySLinkGroups != undefined) {
+      out('read ' + JSON.stringify(json.dependencySLinkGroups));
+    }
+  }
   var slinks : I_DependencySrcSLink[] = json.dependencySrcSLinks;
   var foundSrcSlinks : boolean = false;
   if (slinks == undefined || slinks.length == 0) {
@@ -525,97 +754,49 @@ if (!ctx.isDone()) {
     for (var i=0; i < slinks.length; i++) {
       let dl = new DependencySrcSLink(slinks[i], ctx);
       out(dl.toString());
-      let unixIn: string[] = Paths.toParts(dl.getUnixIn());
+      let unixIn: Path = Paths.toParts(dl.getUnixIn(), true);
       //console.log('unix in is ' + unixIn)
-      let unixTo: string[] = Paths.toParts(dl.getUnixTo());
+      let unixTo: Path = Paths.toParts(dl.getUnixTo(), true);
       //console.log('unix to is ' + unixTo)
-      let slinkIn: string[] = Paths.findPath(ctx.getDir(), unixIn);
-      let slinkTo: string[] = Paths.find(slinkIn, unixTo);
+      let slinkIn: Path = Paths.find(ctx.getDir(), unixIn);
+      let slinkTo: Path = Paths.find(slinkIn, unixTo);
 
-
-      if (ctx.isWindows()) {
-          //existsSync s broken!
-
-          if (ctx.isBash()) {
-            let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnixPath(slinkIn.concat(dl.getName()))], ctx);
-            if (ssr.output.toString().includes('No such file or directory')) {
-
-              ctx.run('rm',['-fr', dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)})
-            }
-          } else {
-            ctx.run('rmdir',['/s', dl.getName()], ctx, { cwd: Paths.toWindowsPath(slinkIn)})
-          }
-      } else {
-        if ( fs.existsSync(dl.getName(), { cwd: Paths.toUnixPath(slinkIn)})) {
-          ctx.run('rm',['-fr',dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)})
-        }
-      }
-
-      if (ctx.isWindows()) {
-        if (ctx.isBash()) {
-          ctx.run('ln',['-s', '-T', Paths.toUnixPath(slinkTo),dl.getName()], ctx, { cwd: Paths.toWindowsPath(slinkIn)});
-        } else {
-          ctx.run('mklink ', ['/J', dl.getName(), Paths.toWindowsPath(slinkTo)], ctx, { cwd: Paths.toWindowsPath(slinkIn)});
-        }
-      } else {
-        ctx.run('ln',['-s', '-T',  Paths.toUnixPath(slinkTo),dl.getName()], ctx, { cwd: Paths.toUnixPath(slinkIn)});
-      }
+      console.log('dl.getName() is ' + dl.getName())
+      fsCtx.rm(new Path([dl.getName()], true), slinkIn);
+      fsCtx.slink(dl.getName(), slinkTo, slinkIn);
+      foundSrcSlinks = true;
     }
   }
 
   var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
+  console.log('linkGroups are ' + linkGroups);
+  console.log('from ' +json.dependencySLinkGroups);
   var foundSLinkGroups : boolean = false;
   if (linkGroups == undefined || linkGroups.length == 0) {
   } else {
     for (var i=0; i < linkGroups.length; i++) {
-      foundSLinkGroups = true;
       let g = new DependencySLinkGroup(linkGroups[i], ctx);
-      let gdir = 'node_modules/' + g.getGroup();
-      out('Deleting ' + gdir);
-      if (ctx.isWindows()) {
-        if (ctx.isBash()) {
-          ctx.run('rm',['-fr', Paths.toUnix(gdir)], ctx)
-        } else {
-          ctx.run('rmdir',['/s', Paths.toOsPath(gdir)], ctx)
-        }
-      } else {
-        ctx.run('rm',['-fr', Paths.toOsPath(gdir)], ctx)
-      }
-      out('Creating ' + gdir);
-      if (ctx.isWindows()) {
-        if (ctx.isBash()) {
-          ctx.run('mkdir',[Paths.toUnix(gdir)], ctx);
-        } else {
-          ctx.run('mkdir',[Paths.toOsPath(gdir)], ctx);
-        }
-      } else {
-        ctx.run('mkdir',[Paths.toOsPath(gdir)], ctx);
-      }
-
-      let inDir = Paths.toOsPath(g.getIn());
-      out('Linking in ' + inDir);
+      let unixIn: Path = Paths.toParts(g.getUnixIn(), true);
+      console.log('unixIn is ' + unixIn.toString())
+      fsCtx.rm(unixIn, ctx.getDir());
+      let gPath : Path = fsCtx.mkdirTree(unixIn, ctx.getDir());
       g.getProjects().forEach((p) => {
-        out(p.toString());
-        if (ctx.isWindows()) {
-          if (ctx.isBash()) {
-            ctx.run('ln',['-s', '-T', Paths.toUnix(p.getUnixTo()), Paths.toUnix(p.getModluePath())], ctx);
-          } else {
-            ctx.run('mklink ', ['/J', Paths.toOsPath(p.getUnixTo()), Paths.toOsPath(p.getModluePath())], ctx);
-          }
-        } else {
-          ctx.run('ln',['-s', '-T', Paths.toOsPath(p.getUnixTo()), Paths.toOsPath(p.getModluePath())], ctx);
+        if (p.getModluePath() == undefined) {
+          throw Error('The module path MUST be defined for ' + p.toString() + '\n\tin ' + g.toString())
         }
+        fsCtx.slink(p.getModluePath(), p.getUnixTo(), gPath);
       });
+      foundSLinkGroups = true;
     }
   }
 
   if (!foundSLinkGroups || !foundSrcSlinks) {
-    if (!foundSLinkGroups && !foundSrcSlinks) {
-      out('No dependencySLinkGroups or dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
-    } else if (!foundSLinkGroups) {
-      out('No dependencySLinkGroups found in \n\t' + currentPkgJsonOs);
-    } else {
-      out('No dependencySrcSLinks found in \n\t' + currentPkgJsonOs);
+    if (foundSLinkGroups) {
+      out('No dependencySLinkGroups found in \n\t' + currentPkgJson);
+    } else if (foundSLinkGroups) {
+      out('No dependencySrcSLinks found in \n\t' + currentPkgJson);
+    } else if (!foundSLinkGroups && !foundSrcSlinks) {
+      out('No dependencySLinkGroups or dependencySrcSLinks found in \n\t' + currentPkgJson);
     }
   }
 }
