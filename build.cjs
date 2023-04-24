@@ -24,31 +24,6 @@ if (isWin) {
   npm = 'npm.cmd'
 }
 
-function build() {
-  run(npm,['run','tsc']);
-}
-
-function clean() {
-  run('rm',['-fr','dist']);
-}
-
-function getDependencies() {
-    run(npm,['i']);
-  }
-
-const DLOCAL_DESC = 'Uninstalls transpiles and installes slink on the  local machine.';
-function dlocal() {
-    uninstall();
-    clean();
-    //getDependencies();
-    build();
-    install();
-    console.log('You can now run the following manual tests;\n\tslink --help')
-}
-
-function install() {
-  run(npm,['install','-g','.']);
-}
 
 function out(cmd, spawnSyncReturns) {
   console.log('ran ' + cmd );
@@ -73,19 +48,17 @@ function run(cmd, args) {
   out(cc, spawnSync(cmd, args, { cwd: projectPath }));
 }
 
-function uninstall() {
-  run(npm,['uninstall','-g','@ts.adligo.org/slink']);
+console.log('in build.cjs with ' + process.argv)
+for (var i=2; i < process.argv.length; i++) {
+  switch (process.argv[i]) {
+    case '--install-local':
+      console.log('processing --install-local ')
+      run(npm,['uninstall','-g','@ts.adligo.org/slink']);
+      run('rm',['-fr','dist']);
+      run(npm,['run','tsc']);
+      run(npm,['install','-g','.']);
+      break;
+    default: throw Error('Unknown flag / argument ' + process.argv[i]);
+  }
 }
 
-module.exports = function(grunt) {
-
-  // Project configuration.
-  grunt.initConfig({
-    pkg: grunt.file.readJSON('package.json'),
-    
-  });
-  
-  grunt.registerTask('dlocal', DLOCAL_DESC, dlocal);
-  grunt.registerTask('default', DLOCAL_DESC, dlocal);
-  
-  };

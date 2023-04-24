@@ -160,16 +160,16 @@ export class Paths {
       }
     } 
     let pp: string[] = parts.getParts();
-    console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
+    //console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
     let root = pp.slice(0, pp.length - dd);
-    console.log('Root is: ' + root);
+    //console.log('Root is: ' + root);
     var r = root;
     for (var i=0; i< rpp.length; i++) {
       if (rpp[i] != '..') {
         r = r.concat(rpp[i]);
       }
     } 
-    console.log('New relative path is\n\t' + r);
+    //console.log('New relative path is\n\t' + r);
     return new Path(r, false);
   }
 
@@ -473,26 +473,42 @@ class CliCtx {
   }
  
   private logCmd(cmdWithArgs: string, spawnSyncReturns: SpawnSyncReturns<Buffer>, ctx: CliCtx, options?: any ): SpawnSyncReturns<Buffer> {
-    out('ran ' + cmdWithArgs  );
+    if (this.map.has(DEBUG.cmd)) {
+      this.out('ran ' + cmdWithArgs  );
+    }
     if (options != undefined) {
       if (options.cwd != undefined) {
-        out('\tin ' + options.cwd);
+        if (this.map.has(DEBUG.cmd)) {
+          this.out('\tin ' + options.cwd);
+        }
       } else {
-        out('\tin ' + ctx.getDir());
+        if (this.map.has(DEBUG.cmd)) {
+          this.out('\tin ' + ctx.getDir());
+        }
       }
     } else {
-      out('\tin ' + ctx.getDir());
+      if (this.map.has(DEBUG.cmd)) {
+        this.out('\tin ' + ctx.getDir());
+      }
     }
-    out('\tand the spawnSyncReturns had;');
+    if (this.map.has(DEBUG.cmd)) {
+      this.out('\tand the spawnSyncReturns had;');
+    }
     if (spawnSyncReturns.error != undefined) {
-      out('\tError: ' + spawnSyncReturns.error);
-      out('\t\t' + spawnSyncReturns.error.message);
+      if (this.map.has(DEBUG.cmd)) {
+        this.out('\tError: ' + spawnSyncReturns.error);
+        this.out('\t\t' + spawnSyncReturns.error.message);
+      }
     }  
     if (spawnSyncReturns.stderr != undefined) {
-      out('\tStderr: ' + spawnSyncReturns.stderr);
+      if (this.map.has(DEBUG.cmd)) {
+        this.out('\tStderr: ' + spawnSyncReturns.stderr);
+      }
     }
     if (spawnSyncReturns.stdout != undefined) {
-      out('\tStdout: ' + spawnSyncReturns.stdout);
+      if (this.map.has(DEBUG.cmd)) {
+        this.out('\tStdout: ' + spawnSyncReturns.stdout);
+      }
     }
     return spawnSyncReturns;
   }
@@ -736,7 +752,7 @@ if (!ctx.isDone()) {
     }
   }
   out('reading ' + currentPkgJson);
-  out('\t' + currentPkgJsonPath.toString());
+  //out('\t' + currentPkgJsonPath.toString());
   let fsCtx = new FsContext(ctx);
   let json = fsCtx.readJson(currentPkgJsonPath);
   if (ctx.isDebug()) {
@@ -763,7 +779,7 @@ if (!ctx.isDone()) {
       let slinkIn: Path = Paths.find(ctx.getDir(), unixIn);
       let slinkTo: Path = Paths.find(slinkIn, unixTo);
 
-      console.log('dl.getName() is ' + dl.getName())
+      //console.log('dl.getName() is ' + dl.getName())
       fsCtx.rm(new Path([dl.getName()], true), slinkIn);
       fsCtx.slink(dl.getName(), slinkTo, slinkIn);
       foundSrcSlinks = true;
@@ -771,15 +787,15 @@ if (!ctx.isDone()) {
   }
 
   var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
-  console.log('linkGroups are ' + linkGroups);
-  console.log('from ' +json.dependencySLinkGroups);
+  //console.log('linkGroups are ' + linkGroups);
+  //console.log('from ' +json.dependencySLinkGroups);
   var foundSLinkGroups : boolean = false;
   if (linkGroups == undefined || linkGroups.length == 0) {
   } else {
     for (var i=0; i < linkGroups.length; i++) {
       let g = new DependencySLinkGroup(linkGroups[i], ctx);
       let unixIn: Path = Paths.toParts(g.getUnixIn(), true);
-      console.log('unixIn is ' + unixIn.toString())
+      //console.log('unixIn is ' + unixIn.toString())
       fsCtx.rm(unixIn, ctx.getDir());
       let gPath : Path = fsCtx.mkdirTree(unixIn, ctx.getDir());
       g.getProjects().forEach((p) => {

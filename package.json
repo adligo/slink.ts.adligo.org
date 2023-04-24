@@ -11,21 +11,21 @@
     "typescript": "^5.0.3"
   },
   "todo": "remove dependencySLinks below, it's just for testing ;)",
-  "dependencySLinkGroups": [{
-    "group": "@ts.adligo.org",
-    "projects": [{
-      "project": "io.ts.adligo.org",
-      "modulePath": "io"}]
-  }],
+  "dependencySLinkGroups": [
+    {
+      "group": "@ts.adligo.org",
+      "projects": [
+        {
+          "project": "io.ts.adligo.org",
+          "modulePath": "io"
+        }
+      ]
+    }
+  ],
   "devDependencies": {
     "@ts.adligo.org/io": "^0.0.7",
-    "@types/node": "^18.15.12",
-    "child_process": "^1.0.2",
-    "grunt": "~0.4.5",
-    "grunt-contrib-jshint": "~0.10.0",
-    "grunt-contrib-nodeunit": "~0.4.1",
-    "grunt-contrib-uglify": "~0.5.0",
-    "ts-node": "^10.9.1"
+    "@types/node": "^18.16.0",
+    "child_process": "^1.0.2"
   },
   "homepage": "https://github.com/adligo/slink.ts.adligo.org#readme",
   "keywords": [
@@ -43,10 +43,10 @@
     "url": "git+https://github.com/adligo/slink.ts.adligo.org.git"
   },
   "scripts": {
-    "run": "ts-node src/slink.ts",
+    "build": "node build.cjs --install-local",
     "test": "test",
     "tsc": "tsc"
   },
   "type": "commonjs",
-  "version": "1.1.1"
+  "version": "1.1.2"
 }
