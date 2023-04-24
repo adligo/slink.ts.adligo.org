@@ -343,6 +343,8 @@ class CliCtx {
       }
     }
     this.home = Paths.toParts(args[1], false);
+    let homeParts: string[] = this.home.getParts();
+    this.home = Paths.toParts(new Path(homeParts.slice(0,homeParts.length - 2), false, IS_WINDOWS).toPathString(), false);
     for (var i=2; i< args.length; i++) {
       let a = args[i];
       //out('processing cli arg ' + a);
@@ -398,9 +400,9 @@ class CliCtx {
 
       let fsc: FsContext = new FsContext(this);
       //out('Got homePkgJson ' + homePkgJson + ' fs is ' + fs);
-      let jObj = fsc.readJson(homePkgJsonName);
+      let jObj = JSON.parse(fs.readFileSync(homePkgJsonName.toPathString()));
       //out('Got JSON ' + jObj);
-      out(jObj.version);
+      this.print(jObj.version);
       this.done = true;
     }
   }
@@ -667,7 +669,7 @@ export class DependencySLinkProject {
   constructor(group: string, info: I_DependencySLinkProject, ctx: CliCtx) {
     this.project = info.project;
     this.modulePath = info.modulePath;
-    this.unixTo = Paths.toParts('../../../' + info.project + '/src', true));
+    this.unixTo = Paths.toParts('../../../' + info.project + '/src', true);
   }
 
   getProjectName(): string { return this.project; }
