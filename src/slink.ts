@@ -59,7 +59,7 @@ export class CliCtxFlag {
   private cmd: string;
   private letter?: string;
   private description?: string;
-  private flag?: boolean;
+  private flag: boolean;
 
   constructor(flag: I_CliCtxFlag) {
     this.cmd = flag.cmd;
@@ -287,10 +287,31 @@ export class Paths {
 }
 
 const DEBUG: I_CliCtxFlag = {cmd: "debug", description: "Displays debugging information about htis program.", flag: true}
+const LOG: I_CliCtxFlag = {cmd: "log", description: "Writes a slink.log file in the run directory.", flag: true}
 const HELP: I_CliCtxFlag = {cmd: "help", description: "Displays the Help Menu, prints this output."}
 const VERSION: I_CliCtxFlag = {cmd: "version", description: "Displays the version.", flag: true, letter: "v"}
 
-class CliCtx {
+export class CliCtxLog {
+  private fileName?: string;
+  private messages: string[] = new Array();
+
+  log(message: string) {
+    if (this.fileName == undefined) {
+      this.messages = this.messages.concat(message);
+    } else {
+      fs.appendFileSync(this.fileName, message);
+    }
+  }
+  setFileName(fileName: string) {
+    this.fileName = fileName;
+    if (this.messages.length >- 1) {
+      this.messages.forEach((m) => {
+        fs.appendFileSync(this.fileName, m);
+      });
+    }
+  }
+}
+export class CliCtx {
   private done: boolean = false;
   /**
    * This is the current working directory of your shell, if possible
@@ -298,6 +319,7 @@ class CliCtx {
    */
   private dir: Path;
   private i_out: I_Out;
+  private log: CliCtxLog;
   /**
    * this is the home directory where your application is installed,
    * in the npm shared space of your computer
@@ -314,7 +336,7 @@ class CliCtx {
    *   CLI script is.  This defaults to 1 for scripts in the src dir.
    * @param out 
    */
-  constructor(flags: I_CliCtxFlag[], args?: string [], belowRoot?: number, out?: I_Out) {
+  constructor(flags: I_CliCtxFlag[], args?: string [], belowRoot?: number, log?: CliCtxLog, out?: I_Out) {
     if (args == undefined) {
       args = process.argv;
     }
@@ -323,6 +345,9 @@ class CliCtx {
     }
     if (out == undefined) {
       out = (message) => console.log(message);
+    }
+    if (log == undefined) {
+      this.log = new CliCtxLog();
     }
     this.i_out = out;
     let allFlags: CliCtxFlag[] = new Array(flags.length);
@@ -357,6 +382,9 @@ class CliCtx {
           let cmd = a.substring(2, a.length);
           //out('cmd is ' + cmd);
           let flag: CliCtxFlag = map2Cmds.get(cmd);
+          if (flag == undefined) {
+            throw new Error('No flag found for command ' + cmd);
+          }
           if (flag.isFlag()) {
             this.map.set(cmd, new CliCtxArg(flag));            
           } else if (i + 1 < args.length) {
@@ -403,6 +431,9 @@ class CliCtx {
       let jObj = JSON.parse(fs.readFileSync(homePkgJsonName.toPathString()));
       //out('Got JSON ' + jObj);
       this.print(jObj.version);
+      if (this.map.has(DEBUG.cmd)) {
+        this.print('from file: ' + homePkgJsonName.toPathString());
+      }
       this.done = true;
     }
   }
@@ -442,6 +473,9 @@ class CliCtx {
     if (this.map.has(DEBUG.cmd)) {
       console.log(message); 
     }
+    if (this.map.has(LOG.cmd)) {
+      this.log.log(message + '\n');
+    }
   }
   print(message: string) {console.log(message);  }
   setDir(): void { 
@@ -469,6 +503,11 @@ class CliCtx {
     this.dir = Paths.toParts(dir, false);
     if (this.map.has('debug')) {
       out('after toOsPath CliCtx.dir is ' + this.dir.toString());
+    }
+    if (this.map.has(LOG.cmd)) {
+      let logFileName = new Path(this.dir.getParts().concat('slink.log'), false, IS_WINDOWS).toPathString();
+      out('writing to logfile ' + logFileName);
+      this.log.setFileName(logFileName);
     }
   }
  
@@ -519,6 +558,43 @@ export class FsContext {
 
   constructor(cliCtx: CliCtx) {
     this.ctx = cliCtx;
+  }
+
+  existsAbs(path: Path): boolean {
+    if (ctx.isWindows()) {
+      //existsSync s broken! for symblic links at least, this is clugy hack
+      if (ctx.isBash()) {
+        let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(path)], ctx);
+        if (ssr.error != undefined) {
+          //assume an error is a failure
+          return false;
+        } else if (ssr.output != undefined) {
+          if (ssr.output.toString().includes('No such file or directory')) {
+            return false;
+          }
+        }
+        return true;
+      } else {
+        let ssr: SpawnSyncReturns<Buffer> = ctx.run('dir',[ Paths.toUnix(path)], ctx);
+        if (ssr.error != undefined ) {
+          //assume an error is a failure
+          return false;
+        } else if (ssr.output != undefined) {
+          if (ssr.output.toString().includes('No such file or directory')) {
+            return false;
+          }
+        }
+        return true;
+      }
+    } else {
+      let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(path)], ctx);
+      if (ssr.error != undefined ) {
+        //assume an error is a failure
+        return false;
+      }
+      return true;
+    }
+
   }
 
   exists(relativePathParts: Path, inDir: Path): boolean {
@@ -736,7 +812,7 @@ const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in no
   "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
 const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
     "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
-let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, HELP, VERSION];
+let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, LOG, HELP, VERSION];
 let ctx = new CliCtx(flags, process.argv, 2);
 if (!ctx.isDone()) {
   ctx.setDir();
@@ -751,70 +827,76 @@ if (!ctx.isDone()) {
         'please set the current working directory using --dir <someDirectory/>.');
     }
   }
-  out('reading ' + currentPkgJson);
+
   //out('\t' + currentPkgJsonPath.toString());
   let fsCtx = new FsContext(ctx);
-  let json = fsCtx.readJson(currentPkgJsonPath);
-  if (ctx.isDebug()) {
-    //out('read ' + JSON.stringify(json));
-    if (json.dependencySrcSLinks != undefined) {
-      out('read ' + JSON.stringify(json.dependencySrcSLinks));
-    }
-    if (json.dependencySLinkGroups != undefined) {
-      out('read ' + JSON.stringify(json.dependencySLinkGroups));
-    }
-  }
-  var slinks : I_DependencySrcSLink[] = json.dependencySrcSLinks;
-  var foundSrcSlinks : boolean = false;
-  if (slinks == undefined || slinks.length == 0) {
+  if (!fsCtx.existsAbs(currentPkgJsonPath)) {
+    ctx.print('Aborting coudln\'t find a package.json file at;');
+    ctx.print(currentPkgJsonPath.toPathString());
   } else {
-    foundSrcSlinks = true;
-    for (var i=0; i < slinks.length; i++) {
-      let dl = new DependencySrcSLink(slinks[i], ctx);
-      out(dl.toString());
-      let unixIn: Path = Paths.toParts(dl.getUnixIn(), true);
-      //console.log('unix in is ' + unixIn)
-      let unixTo: Path = Paths.toParts(dl.getUnixTo(), true);
-      //console.log('unix to is ' + unixTo)
-      let slinkIn: Path = Paths.find(ctx.getDir(), unixIn);
-      let slinkTo: Path = Paths.find(slinkIn, unixTo);
-
-      //console.log('dl.getName() is ' + dl.getName())
-      fsCtx.rm(new Path([dl.getName()], true), slinkIn);
-      fsCtx.slink(dl.getName(), slinkTo, slinkIn);
+    out('reading ' + currentPkgJson);
+    let json = fsCtx.readJson(currentPkgJsonPath);
+    if (ctx.isDebug()) {
+      //out('read ' + JSON.stringify(json));
+      if (json.dependencySrcSLinks != undefined) {
+        out('read ' + JSON.stringify(json.dependencySrcSLinks));
+      }
+      if (json.dependencySLinkGroups != undefined) {
+        out('read ' + JSON.stringify(json.dependencySLinkGroups));
+      }
+    }
+    var slinks : I_DependencySrcSLink[] = json.dependencySrcSLinks;
+    var foundSrcSlinks : boolean = false;
+    if (slinks == undefined || slinks.length == 0) {
+    } else {
       foundSrcSlinks = true;
-    }
-  }
+      for (var i=0; i < slinks.length; i++) {
+        let dl = new DependencySrcSLink(slinks[i], ctx);
+        out(dl.toString());
+        let unixIn: Path = Paths.toParts(dl.getUnixIn(), true);
+        //console.log('unix in is ' + unixIn)
+        let unixTo: Path = Paths.toParts(dl.getUnixTo(), true);
+        //console.log('unix to is ' + unixTo)
+        let slinkIn: Path = Paths.find(ctx.getDir(), unixIn);
+        let slinkTo: Path = Paths.find(slinkIn, unixTo);
 
-  var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
-  //console.log('linkGroups are ' + linkGroups);
-  //console.log('from ' +json.dependencySLinkGroups);
-  var foundSLinkGroups : boolean = false;
-  if (linkGroups == undefined || linkGroups.length == 0) {
-  } else {
-    for (var i=0; i < linkGroups.length; i++) {
-      let g = new DependencySLinkGroup(linkGroups[i], ctx);
-      let unixIn: Path = Paths.toParts(g.getUnixIn(), true);
-      //console.log('unixIn is ' + unixIn.toString())
-      fsCtx.rm(unixIn, ctx.getDir());
-      let gPath : Path = fsCtx.mkdirTree(unixIn, ctx.getDir());
-      g.getProjects().forEach((p) => {
-        if (p.getModluePath() == undefined) {
-          throw Error('The module path MUST be defined for ' + p.toString() + '\n\tin ' + g.toString())
-        }
-        fsCtx.slink(p.getModluePath(), p.getUnixTo(), gPath);
-      });
-      foundSLinkGroups = true;
+        //console.log('dl.getName() is ' + dl.getName())
+        fsCtx.rm(new Path([dl.getName()], true), slinkIn);
+        fsCtx.slink(dl.getName(), slinkTo, slinkIn);
+        foundSrcSlinks = true;
+      }
     }
-  }
 
-  if (!foundSLinkGroups || !foundSrcSlinks) {
-    if (foundSLinkGroups) {
-      out('No dependencySLinkGroups found in \n\t' + currentPkgJson);
-    } else if (foundSLinkGroups) {
-      out('No dependencySrcSLinks found in \n\t' + currentPkgJson);
-    } else if (!foundSLinkGroups && !foundSrcSlinks) {
-      out('No dependencySLinkGroups or dependencySrcSLinks found in \n\t' + currentPkgJson);
+    var linkGroups : I_DependencySLinkGroup[] = json.dependencySLinkGroups;
+    //console.log('linkGroups are ' + linkGroups);
+    //console.log('from ' +json.dependencySLinkGroups);
+    var foundSLinkGroups : boolean = false;
+    if (linkGroups == undefined || linkGroups.length == 0) {
+    } else {
+      for (var i=0; i < linkGroups.length; i++) {
+        let g = new DependencySLinkGroup(linkGroups[i], ctx);
+        let unixIn: Path = Paths.toParts(g.getUnixIn(), true);
+        //console.log('unixIn is ' + unixIn.toString())
+        fsCtx.rm(unixIn, ctx.getDir());
+        let gPath : Path = fsCtx.mkdirTree(unixIn, ctx.getDir());
+        g.getProjects().forEach((p) => {
+          if (p.getModluePath() == undefined) {
+            throw Error('The module path MUST be defined for ' + p.toString() + '\n\tin ' + g.toString())
+          }
+          fsCtx.slink(p.getModluePath(), p.getUnixTo(), gPath);
+        });
+        foundSLinkGroups = true;
+      }
+    }
+
+    if (!foundSLinkGroups || !foundSrcSlinks) {
+      if (foundSLinkGroups) {
+        out('No dependencySLinkGroups found in \n\t' + currentPkgJson);
+      } else if (foundSLinkGroups) {
+        out('No dependencySrcSLinks found in \n\t' + currentPkgJson);
+      } else if (!foundSLinkGroups && !foundSrcSlinks) {
+        out('No dependencySLinkGroups or dependencySrcSLinks found in \n\t' + currentPkgJson);
+      }
     }
   }
 }
