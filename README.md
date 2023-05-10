@@ -29,7 +29,7 @@ In Example, under the root package.json object add the attribute;
 ```
 Then import the code in your TypeScript file;
 ```
-  import {I_Out} from './i_io.ts.adligo.org@slink/i_io.mjs';
+  import {I_Out} from './i_io.ts.adligo.org@slink/i_io.mts';
 ```
 
 ## dependencySLinkGroups
