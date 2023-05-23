@@ -46,11 +46,10 @@ In Example, under the root package.json object add the attribute;
 ```
 
 ## Install Locally
-You can install this slink command line application locally with grunt;
+You can install this slink command line application locally with npm;
 ```
-npm install -g grunt-cli
 cd slink.ts.adligo.org
-grunt
+npm run build.cjs
 ```
 ## Uninstall the package;
 ```
