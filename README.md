@@ -49,7 +49,7 @@ In Example, under the root package.json object add the attribute;
 You can install this slink command line application locally with npm;
 ```
 cd slink.ts.adligo.org
-npm run build.cjs
+npm run build
 ```
 ## Uninstall the package;
 ```
