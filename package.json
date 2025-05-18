@@ -8,24 +8,13 @@
   },
   "description": "This is a simple Type Script Application that will create symbolic links from webpack config files with links created by webpack-link inside of your source folder, which improves speed of changing upstream Javascript or Typescript in a multiple project system.",
   "dependencies": {
-    "typescript": "^5.0.3"
+	"npm": "11.4.0"
   },
-  "todo": "remove dependencySLinks below, it's just for testing ;)",
-  "dependencySLinkGroups": [
-    {
-      "group": "@ts.adligo.org",
-      "projects": [
-        {
-          "project": "io.ts.adligo.org",
-          "modulePath": "io"
-        }
-      ]
-    }
-  ],
+  "bundleDependencies": ["npm"],
   "devDependencies": {
-    "@ts.adligo.org/io": "^0.0.7",
-    "@types/node": "^18.16.0",
-    "child_process": "^1.0.2"
+	"@types/node": "^18.16.0",
+	"child_process": "^1.0.2",
+	"typescript": "^5.0.3"
   },
   "homepage": "https://github.com/adligo/slink.ts.adligo.org#readme",
   "keywords": [
@@ -37,7 +26,7 @@
   ],
   "license": "Apache-2.0",
   "name": "@ts.adligo.org/slink",
-  "main": "src/slink.ts",
+  "main": "./src/slink.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adligo/slink.ts.adligo.org.git"
@@ -48,5 +37,5 @@
     "tsc": "tsc"
   },
   "type": "commonjs",
-  "version": "1.1.6"
+  "version": "1.2.7"
 }
