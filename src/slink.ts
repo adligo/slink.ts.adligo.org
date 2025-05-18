@@ -18,8 +18,58 @@ const fs = require('node:fs');
 //const path  = require('path');
 const { spawnSync } = require('child_process')
 const { stream } = require('stream'); 
-import {I_Out} from '@ts.adligo.org/io';
 import { SpawnSyncReturns } from 'child_process';
+const windowCmdPath = 'C:\\Windows\\system32\\cmd';
+
+
+export type I_Out  = (message: string) => void;
+
+export interface I_CmdLog{
+	 logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any ): void;
+}
+
+export class ShellRunner {
+	cmdLog: I_CmdLog;
+	debug: boolean = false;
+	out: I_Out;
+	
+	constructor(cmdLog: I_CmdLog, out: I_Out, debug?: boolean) {
+		this.cmdLog = cmdLog;
+		if (debug != undefined) {
+			this.debug = debug;
+		}
+		this.out = out;
+	}
+	
+	public run(cmd: string, args: string[], options?: any): any {
+	  var cc = cmd;
+	  if (args != undefined) {
+	    for (var i=0; i < args.length; i++) {
+	      cc = cc + ' ' + args[i];
+	    }
+	  }
+	  //Execute fork to GitBash from GitBash execution
+	  if (options == undefined) {
+	  	options = new Object();
+
+	  	options.shell = process.env.SHELL;
+		if (this.debug) {
+	  		this.out('New options, running with shell is ' + options.shell);
+		}
+	  } else {
+		if (options.keepShell == undefined || options.keepShell == false) {
+	  		options.shell = process.env.SHELL;
+		}
+		if (this.debug) {
+	  		console.log('Running with shell is ' + options.shell);
+		}
+	  }
+	  var ssr: any = spawnSync(cmd, args, options);
+	  this.cmdLog.logCmd(cc, ssr , options);
+	  return ssr;
+	}
+}
+
 
 const IS_WINDOWS = process.platform === "win32";
 function getPathSeperator() {
@@ -29,7 +79,7 @@ function getPathSeperator() {
     return '/';
   }
 }
-const out : I_Out = (foo) => console.log(foo);
+const out: I_Out = (foo) => console.log(foo);
 
 /**
  * This is a set of attributes that can be used on the Command Line as
@@ -311,7 +361,7 @@ export class CliCtxLog {
     }
   }
 }
-export class CliCtx {
+export class CliCtx implements I_CmdLog {
   private done: boolean = false;
   /**
    * This is the current working directory of your shell, if possible
@@ -320,6 +370,7 @@ export class CliCtx {
   private dir: Path;
   private i_out: I_Out;
   private log: CliCtxLog;
+  private shellRun: ShellRunner;
   /**
    * this is the home directory where your application is installed,
    * in the npm shared space of your computer
@@ -349,6 +400,7 @@ export class CliCtx {
     if (log == undefined) {
       this.log = new CliCtxLog();
     }
+	this.shellRun = new ShellRunner(this, out, this.map.has('debug'));
     this.i_out = out;
     let allFlags: CliCtxFlag[] = new Array(flags.length);
     let map2Cmds: Map<string, CliCtxFlag> = new Map();
@@ -439,6 +491,10 @@ export class CliCtx {
   }
   getDir(): Path { return this.dir; }
   getHome(): Path { return this.home; }
+  public run(cmd: string, args: string[], options?: any): any {
+	return this.shellRun.run(cmd, args, options);
+  }
+  
   isBash(): boolean { 
     if (this.map.has(DEBUG.cmd)) {
       out('process.env.SHELL is ' + process.env.SHELL);
@@ -455,15 +511,6 @@ export class CliCtx {
   isWindows(): boolean { return IS_WINDOWS; }
   
   
-  run(cmd: string, args: string[], ctx: CliCtx, options?: any): SpawnSyncReturns<Buffer> {
-    var cc = cmd;
-    if (args != undefined) {
-      for (var i=0; i < args.length; i++) {
-        cc = cc + ' ' + args[i];
-      }
-    }
-    return this.logCmd(cc, spawnSync(cmd, args, options), ctx, options);
-  }
   /**
    * Checks if the context is set to debug 
    * and if so prints the message, if you want to print regarless use print
@@ -511,7 +558,7 @@ export class CliCtx {
     }
   }
  
-  private logCmd(cmdWithArgs: string, spawnSyncReturns: SpawnSyncReturns<Buffer>, ctx: CliCtx, options?: any ): SpawnSyncReturns<Buffer> {
+  public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any ): void {
     if (this.map.has(DEBUG.cmd)) {
       this.out('ran ' + cmdWithArgs  );
     }
@@ -549,7 +596,6 @@ export class CliCtx {
         this.out('\tStdout: ' + spawnSyncReturns.stdout);
       }
     }
-    return spawnSyncReturns;
   }
 }
 
@@ -561,10 +607,13 @@ export class FsContext {
   }
 
   existsAbs(path: Path): boolean {
+	if (ctx.isDebug()) {
+		ctx.out("in existsAbs with path (toUnix) " + Paths.toUnix(path));
+	}
     if (ctx.isWindows()) {
       //existsSync s broken! for symblic links at least, this is clugy hack
       if (ctx.isBash()) {
-        let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(path)], ctx);
+        let ssr: any = ctx.run('ls',[ Paths.toUnix(path)], ctx);
         if (ssr.error != undefined) {
           //assume an error is a failure
           return false;
@@ -575,7 +624,7 @@ export class FsContext {
         }
         return true;
       } else {
-        let ssr: SpawnSyncReturns<Buffer> = ctx.run('dir',[ Paths.toUnix(path)], ctx);
+        let ssr: any = ctx.run('dir',[ Paths.toUnix(path)]);
         if (ssr.error != undefined ) {
           //assume an error is a failure
           return false;
@@ -587,7 +636,7 @@ export class FsContext {
         return true;
       }
     } else {
-      let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(path)], ctx);
+      let ssr: any = ctx.run('ls',[ Paths.toUnix(path)]);
       if (ssr.error != undefined ) {
         //assume an error is a failure
         return false;
@@ -598,10 +647,13 @@ export class FsContext {
   }
 
   exists(relativePathParts: Path, inDir: Path): boolean {
+	if (ctx.isDebug()) {
+		ctx.out("in exists with path (toUnix) " + Paths.toUnix(relativePathParts) + " in " + Paths.toUnix(inDir));
+	}
     if (ctx.isWindows()) {
       //existsSync s broken! for symblic links at least, this is clugy hack
       if (ctx.isBash()) {
-        let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(relativePathParts)], ctx, 
+        let ssr: SpawnSyncReturns<string> = ctx.run('ls',[ Paths.toUnix(relativePathParts)], 
           { cwd: Paths.toWindows(inDir)});
         if (ssr.error != undefined) {
           //assume an error is a failure
@@ -613,7 +665,7 @@ export class FsContext {
         }
         return true;
       } else {
-        let ssr: SpawnSyncReturns<Buffer> = ctx.run('dir',[ Paths.toUnix(relativePathParts)], ctx, 
+        let ssr: any = ctx.run('dir',[ Paths.toUnix(relativePathParts)], 
           { cwd: Paths.toWindows(inDir)});
         if (ssr.error != undefined ) {
           //assume an error is a failure
@@ -626,7 +678,7 @@ export class FsContext {
         return true;
       }
     } else {
-      let ssr: SpawnSyncReturns<Buffer> = ctx.run('ls',[ Paths.toUnix(relativePathParts)], ctx, 
+      let ssr: any = ctx.run('ls',[ Paths.toUnix(relativePathParts)], 
         { cwd: Paths.toUnix(inDir)});
       if (ssr.error != undefined ) {
         //assume an error is a failure
@@ -641,12 +693,12 @@ export class FsContext {
     if (ctx.isWindows()) {
       //existsSync s broken!
       if (ctx.isBash()) {
-        ctx.run('mkdir',[dir], ctx, { cwd: Paths.toWindows(inDir)});
+        ctx.run('mkdir',[dir], { cwd: Paths.toWindows(inDir)});
       } else {
-        ctx.run('mkdir',[dir], ctx, { cwd: Paths.toWindows(inDir)});
+        ctx.run('mkdir',[dir],  { cwd: Paths.toWindows(inDir)});
       }
     } else {
-      ctx.run('mkdir',[dir], ctx, { cwd: Paths.toUnix(inDir)});
+      ctx.run('mkdir',[dir], { cwd: Paths.toUnix(inDir)});
     }
   }
 
@@ -690,16 +742,19 @@ export class FsContext {
   }
 
   rm(pathParts: Path, inDir: Path) {
+	if (ctx.isDebug()) {
+		ctx.out("in rm (toUnix) " + Paths.toUnix(pathParts) + " in " + Paths.toUnix(inDir));
+	}
     if (this.exists(pathParts, inDir)) {
       if (ctx.isWindows()) {
         //existsSync s broken!
         if (ctx.isBash()) {
-          ctx.run('rm',['-fr',Paths.toUnix(pathParts)], ctx, { cwd: Paths.toWindows(inDir)});
+          ctx.run('rm',['-fr',Paths.toUnix(pathParts)], { cwd: Paths.toWindows(inDir)});
         } else {
-          ctx.run('rmdir',['/s', Paths.toWindows(pathParts)], ctx, { cwd: Paths.toWindows(inDir)});
+          ctx.run('rmdir',['/s', Paths.toWindows(pathParts)], { cwd: Paths.toWindows(inDir)});
         }
       } else {
-        ctx.run('rm',['-fr',Paths.toUnix(pathParts)], ctx, { cwd: Paths.toUnix(inDir)});
+        ctx.run('rm',['-fr',Paths.toUnix(pathParts)], { cwd: Paths.toUnix(inDir)});
       }
     }
   }
@@ -709,13 +764,20 @@ export class FsContext {
    */
   slink(slinkName: string, toDir: Path, inDir: Path) {
     if (ctx.isWindows()) {
-      if (ctx.isBash()) {
-        ctx.run('ln',['-s', '-T', Paths.toUnix(toDir),slinkName], ctx, { cwd: Paths.toWindows(inDir)});
-      } else {
-        ctx.run('mklink ', ['/J', slinkName, Paths.toWindows(toDir)], ctx, { cwd: Paths.toWindows(inDir)});
-      }
+	  var toDirP =  Paths.toWindows(toDir);
+	  if (ctx.isDebug()) {
+		 ctx.print("Linking to " + toDirP);
+	  }
+	  var options ={ cwd:  Paths.toWindows(inDir), shell: windowCmdPath, keepShell: true  }
+	  //var options ={ cwd:  Paths.toUnix(inDir), shell: process.env.SHELL}
+	  if (ctx.isDebug()) {
+		ctx.out("Using shell " + options.shell + " in Windows dir " + options.cwd);
+	  }
+	  //ctx.run('which', ['mklink.cmd'], options);
+	  ctx.run(process.env.MKLINK_CMD, [slinkName, toDirP], options);
+	  //ctx.run('mklink.cmd '+ slinkName + ' ' + toDirP, [], options);
     } else {
-      ctx.run('ln',['-s', '-T',  Paths.toUnix(toDir),slinkName], ctx, { cwd: Paths.toUnix(inDir)});
+      ctx.run('ln',['-s', '-T',  Paths.toUnix(toDir),slinkName], { cwd: Paths.toUnix(inDir)});
     }
   }
 }
@@ -862,7 +924,13 @@ if (!ctx.isDone()) {
 
         //console.log('dl.getName() is ' + dl.getName())
         fsCtx.rm(new Path([dl.getName()], true), slinkIn);
+		if (ctx.isDebug()) {
+			ctx.out("\n\nMain script 915 creating slink ");
+		}
         fsCtx.slink(dl.getName(), slinkTo, slinkIn);
+		if (ctx.isDebug()) {
+			ctx.out("Main script 919 created slink\n\n");
+		}
         foundSrcSlinks = true;
       }
     }
@@ -880,10 +948,17 @@ if (!ctx.isDone()) {
         fsCtx.rm(unixIn, ctx.getDir());
         let gPath : Path = fsCtx.mkdirTree(unixIn, ctx.getDir());
         g.getProjects().forEach((p) => {
+		  
           if (p.getModluePath() == undefined) {
             throw Error('The module path MUST be defined for ' + p.toString() + '\n\tin ' + g.toString())
           }
+		  if (ctx.isDebug()) {
+			ctx.out("\n\nMain script 943 creating group " + g.getGroup());
+		  }
           fsCtx.slink(p.getModluePath(), p.getUnixTo(), gPath);
+		  if (ctx.isDebug()) {
+		  	ctx.out("Main script 947 created group " + g.getGroup() + " \n\n");
+		  }
         });
         foundSLinkGroups = true;
       }
