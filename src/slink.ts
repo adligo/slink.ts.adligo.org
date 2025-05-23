@@ -551,7 +551,7 @@ export class CliCtx implements I_CmdLog {
       //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
       // also update this in the package.json file
       // package.json.version
-      out("1.4.0");
+      out("1.4.1");
       /*
       console.log('Trying to read the version number from the slink install package.json at');
       console.log('this.home = ' + this.home + " + package.json");
