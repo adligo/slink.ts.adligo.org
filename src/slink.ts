@@ -220,14 +220,26 @@ export class Path {
   }
 
   private concat(start: string, sep: string): string {
-    for (var i = 0; i < this.parts.length; i++) {
-      if (this.parts.length - 1 == i) {
-        start = start.concat(this.parts[i]);
-      } else {
-        start = start.concat(this.parts[i]).concat(sep);
+    var r: string = start;
+    if (this.isWindows()) {
+      for (var i = 1; i < this.parts.length; i++) {
+        if (this.parts.length - 1 == i) {
+          r = r.concat(this.parts[i]);
+        } else {
+          r = r.concat(this.parts[i]).concat(sep);
+        }
       }
+      return r;
+    } else {
+      for (var i = 0; i < this.parts.length; i++) {
+        if (this.parts.length - 1 == i) {
+          r = r.concat(this.parts[i]);
+        } else {
+          r = r.concat(this.parts[i]).concat(sep);
+        }
+      }
+      return r;
     }
-    return start;
   }
 }
 export class Paths {
