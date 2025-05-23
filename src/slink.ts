@@ -1012,7 +1012,14 @@ export class SLinkRunner {
 
     // Handle shared node modules via environment variable
     if (json.sharedNodeModuleProjectSLinkEnvVar && json.sharedNodeModuleProjectSLinkEnvVar.length > 0) {
-      this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar);
+      if (this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar)) {
+        if (this.ctx.isDebug()) {
+          this.ctx.out("Processed  sharedNodeModuleProjectSLinkEnvVar");
+        }
+      } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
+        // Handle shared node modules via project links
+        this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks);
+      }
     } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
       // Handle shared node modules via project links
       this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks);
@@ -1025,11 +1032,17 @@ export class SLinkRunner {
     this.handleDependencySLinkGroups(json.dependencySLinkGroups);
   }
 
-  private handleSharedNodeModulesViaEnvVar(envVars: string[]) {
+  /**
+   * 
+   * @param envVars 
+   * @returns true if was processed, false if wasn't
+   */
+  private handleSharedNodeModulesViaEnvVar(envVars: string[]): boolean {
     if (this.ctx.isDebug()) {
       this.ctx.out("Processing sharedNodeModuleProjectSLinkEnvVar: " + JSON.stringify(envVars));
     }
 
+    anyProc: boolean = false;
     for (const envVar of envVars) {
       const envValue = process.env[envVar];
       if (envValue) {
@@ -1046,13 +1059,14 @@ export class SLinkRunner {
           this.ctx.out(`Creating symlink from node_modules to ${Paths.toOs(targetPath)}`);
         }
         this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
-        return; // Use the first valid environment variable
+        return true; // Use the first valid environment variable
       } else {
         if (this.ctx.isDebug()) {
           this.ctx.out(`Environment variable ${envVar} not found or empty`);
         }
       }
     }
+    return false;
   }
 
   private handleSharedNodeModulesViaProjectLinks(projectNames: string[]) {
