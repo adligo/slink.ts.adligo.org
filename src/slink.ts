@@ -551,7 +551,7 @@ export class CliCtx implements I_CmdLog {
       //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
       // also update this in the package.json file
       // package.json.version
-      out("1.4.2");
+      out("1.4.3");
       /*
       console.log('Trying to read the version number from the slink install package.json at');
       console.log('this.home = ' + this.home + " + package.json");
@@ -1042,7 +1042,6 @@ export class SLinkRunner {
       this.ctx.out("Processing sharedNodeModuleProjectSLinkEnvVar: " + JSON.stringify(envVars));
     }
 
-    anyProc: boolean = false;
     for (const envVar of envVars) {
       const envValue = process.env[envVar];
       if (envValue) {
