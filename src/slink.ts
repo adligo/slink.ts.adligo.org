@@ -425,6 +425,14 @@ export class CliCtx implements I_CmdLog {
     if (args == undefined) {
       args = process.argv;
     }
+    // When even --debug and --version aren't working
+    /*
+    console.warn('1.3.7 process.argv are ' + process.argv);
+    console.warn('args are ' + args);
+    if (args != undefined) {
+      console.warn('args are ' + JSON.stringify(args));
+    }
+    */
     if (belowRoot == undefined) {
       belowRoot = 1;
     }
@@ -503,7 +511,16 @@ export class CliCtx implements I_CmdLog {
         }
       }
     }
-    if (this.map.get(HELP.cmd)) {
+    if (this.map.has('debug')) {
+      this.out('Processing commands HELP and VERSION with ' + JSON.stringify(this.map));
+      let val = this.map.get(VERSION.cmd);
+      if (val == undefined) {
+        this.out('this.map.get(VERSION.cmd) is undefined');
+      } else {
+        this.out('this.map.get(VERSION.cmd) is ' + JSON.stringify(val));
+      }
+    }
+    if (this.map.get(HELP.cmd) != undefined) {
       //print the help menu;
       out('This program understands the following commands;\n');
       for (var i = 0; i < flags.length; i++) {
@@ -518,8 +535,16 @@ export class CliCtx implements I_CmdLog {
         }
       }
       this.done = true;
-    } else if (this.map.get(VERSION.cmd)) {
+    } else if (this.map.get(VERSION.cmd) != undefined) {
+      //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
+      // also update this in the package.json file
+      // package.json.version
+      out("1.4.0");
+      /*
+      console.log('Trying to read the version number from the slink install package.json at');
+      console.log('this.home = ' + this.home + " + package.json");
       let homePkgJsonName: Path = new Path(this.home.getParts().concat('package.json'));
+      console.log('homePkgJsonName = ' + homePkgJsonName.toPathString());
 
       //out('Got homePkgJson ' + homePkgJson + ' fs is ' + fs);
       let jObj = JSON.parse(this.fs.readFileSync(homePkgJsonName.toPathString()));
@@ -528,6 +553,7 @@ export class CliCtx implements I_CmdLog {
       if (this.map.has(DEBUG.cmd)) {
         this.print('from file: ' + homePkgJsonName.toPathString());
       }
+      */
       this.done = true;
     }
   }
@@ -598,6 +624,13 @@ export class CliCtx implements I_CmdLog {
       out('writing to logfile ' + logFileName);
       this.log.setFileName(logFileName);
     }
+  }
+
+  public inMap(key: string): boolean {
+    if (this.map.has(key)) {
+      return true;
+    }
+    return false;
   }
 
   public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any): void {
@@ -944,6 +977,7 @@ export class SLinkRunner {
     if (this.ctx.isDebug()) {
       this.ctx.out("In SLinkRunner after ctx.setDir");
     }
+
     let currentDir: Path = new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows());
     let currentPkgJsonPath: Path = new Path(this.ctx.getDir().getParts().concat('package.json'), false, this.ctx.isWindows());
     let currentPkgJson: string = currentPkgJsonPath.toPathString();
@@ -967,10 +1001,8 @@ export class SLinkRunner {
     // Handle shared node modules via environment variable
     if (json.sharedNodeModuleProjectSLinkEnvVar && json.sharedNodeModuleProjectSLinkEnvVar.length > 0) {
       this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar);
-    }
-
-    // Handle shared node modules via project links
-    if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
+    } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
+      // Handle shared node modules via project links
       this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks);
     }
 
