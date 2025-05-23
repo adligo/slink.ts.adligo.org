@@ -103,14 +103,14 @@ export class ShellRunner {
 
 
 const IS_WINDOWS = process.platform === "win32";
-function getPathSeperator() {
+export function getPathSeperator() {
   if (IS_WINDOWS) {
     return '\\';
   } else {
     return '/';
   }
 }
-const out: I_Out = (foo) => console.log(foo);
+export const out: I_Out = (foo) => console.log(foo);
 
 /**
  * This is a set of attributes that can be used on the Command Line as
@@ -220,7 +220,7 @@ export class Path {
   }
 
   private concat(start: string, sep: string): string {
-    for (var i = 1; i < this.parts.length; i++) {
+    for (var i = 0; i < this.parts.length; i++) {
       if (this.parts.length - 1 == i) {
         start = start.concat(this.parts[i]);
       } else {
@@ -367,10 +367,10 @@ export class Paths {
   }
 }
 
-const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true }
-const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: true }
-const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output." }
-const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
+export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true }
+export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: true }
+export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output." }
+export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
 
 export class CliCtxLog {
   private fileName?: string;
@@ -1160,13 +1160,13 @@ export class SLinkRunner {
 }
 
 // Replace the main script with the SLinkRunner
-const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
+export const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
       "\t\tdetails are here;\n" +
       "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
-const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
+export const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
       "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
-let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, LOG, HELP, VERSION];
-let ctx = new CliCtx(flags, process.argv, 2);
+export let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, LOG, HELP, VERSION];
+export let ctx = new CliCtx(flags, process.argv, 2);
 
 // Create and run the SLinkRunner
 const runner = new SLinkRunner(ctx);
