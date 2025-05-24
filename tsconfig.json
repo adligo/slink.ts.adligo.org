@@ -3,7 +3,9 @@
     "emitDecoratorMetadata": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "lib": ["es6"],
+    "lib": [
+      "es6"
+    ],
     "target": "es6",
     "module": "commonjs",
     "moduleResolution": "node",
@@ -11,10 +13,15 @@
     "resolveJsonModule": true,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "**/*.spec.ts"],
+  "include": [
+    "src/**/*.mts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts"
+  ],
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"
-    }
- }
+  }
+}

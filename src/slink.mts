@@ -1,116 +1,35 @@
 #! /usr/bin/env node
 /**
-  * Copyright 2023 Adligo Inc / Scott Morgan
-  *
-  * Licensed under the Apache License, Version 2.0 (the "License");
-  * you may not use this file except in compliance with the License.
-  * You may obtain a copy of the License at
-  *
-  *     http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-import { Buffer } from 'buffer';
+ * Copyright 2023 Adligo Inc / Scott Morgan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import {Buffer} from 'buffer';
 import * as fs from 'fs';
-import { Stream } from 'stream';
-import { spawnSync, SpawnSyncOptions, SpawnSyncReturns } from 'child_process';
-const windowCmdPath = 'C:\\Windows\\system32\\cmd';
+import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
+
+// ###########################  Constants ################################
+//The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
+// also update this in the package.json file
+// package.json.version
+export const VERSION_NBR: string = "1.4.5";
+export const WINDOWS_CMD_PATH = 'C:\\Windows\\system32\\cmd';
 
 
-export type I_Out = (message: string) => void;
-
+// ########################### Interfaces ##################################
 export interface I_CmdLog {
   logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any): void;
 }
-
-export interface I_SpawnSync {
-  spawnSync(command: string, args?: ReadonlyArray<string>, options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>>;
-}
-
-export class SpawnSyncStub implements I_SpawnSync {
-  spawnSync(command: string, args?: ReadonlyArray<string>, options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
-    return spawnSync(command, args, options);
-  }
-}
-
-
-export interface I_Fs {
-  readFileSync(path: fs.PathOrFileDescriptor, options?: {
-      encoding?: null | undefined;
-      flag?: string | undefined;
-  } | null): string;
-}
-
-export class FsStub implements I_Fs {
-  public readFileSync(path: fs.PathOrFileDescriptor, options?: {
-      encoding?: null | undefined;
-      flag?: string | undefined;
-  } | null): string {
-    return fs.readFileSync(path, options).toString();
-  }
-}
-
-export class ShellRunner {
-  cmdLog: I_CmdLog;
-  debug: boolean = false;
-  out: I_Out;
-  sSync?: I_SpawnSync = new SpawnSyncStub();
-
-  constructor(cmdLog: I_CmdLog, out: I_Out, debug?: boolean, mockSpawnSync?: I_SpawnSync) {
-    this.cmdLog = cmdLog;
-    if (debug != undefined) {
-      this.debug = debug;
-    }
-    this.out = out;
-    if (mockSpawnSync != undefined) {
-      this.sSync = mockSpawnSync;
-    }
-  }
-
-  public run(cmd: string, args: string[], options?: any): any {
-    var cc = cmd;
-    if (args != undefined) {
-      for (var i = 0; i < args.length; i++) {
-        cc = cc + ' ' + args[i];
-      }
-    }
-    //Execute fork to GitBash from GitBash execution
-    if (options == undefined) {
-      options = new Object();
-
-      options.shell = process.env.SHELL;
-      if (this.debug) {
-        this.out('New options, running with shell is ' + options.shell);
-      }
-    } else {
-      if (options.keepShell == undefined || options.keepShell == false) {
-        options.shell = process.env.SHELL;
-      }
-      if (this.debug) {
-        console.log('Running with shell is ' + options.shell);
-      }
-    }
-    //stubbed for unit testing
-    var ssr: any = this.sSync.spawnSync(cmd, args, options);
-    this.cmdLog.logCmd(cc, ssr, options);
-    return ssr;
-  }
-}
-
-
-const IS_WINDOWS = process.platform === "win32";
-export function getPathSeperator() {
-  if (IS_WINDOWS) {
-    return '\\';
-  } else {
-    return '/';
-  }
-}
-export const out: I_Out = (foo) => console.log(foo);
 
 /**
  * This is a set of attributes that can be used on the Command Line as
@@ -134,6 +53,238 @@ export interface I_CliCtxFlag {
    * This is the single letter that can be concatinated together (i.e. f and r in rm -fr)
    */
   letter?: string;
+}
+
+export interface I_CliCtxLog {
+  log(message: string): void;
+
+  setFileName(fileName: string): void;
+}
+
+/**
+ * @deprecated remove in 2030
+ */
+export interface I_DependencySLinkGroup {
+  group: string;
+  projects: I_DependencySLinkProject[];
+}
+
+/**
+ * @deprecated remove in 2030
+ */
+export interface I_DependencySLinkProject {
+  project: string;
+  modulePath: string;
+}
+
+/**
+ * @deprecated remove in 2030
+ */
+export interface I_DependencySrcSLink {
+  project: string;
+  srcPath: string;
+  destPath: string;
+}
+
+/**
+ * I_Fs provides the ability to stub out functions like readFileSync
+ * for testing
+ */
+export interface I_Fs {
+  appendFileSync(
+      path: fs.PathOrFileDescriptor,
+      data: string | Uint8Array,
+      options?: fs.WriteFileOptions,
+  ): void;
+
+  readFileSync(path: fs.PathOrFileDescriptor, options?: {
+      encoding?: null | undefined;
+      flag?: string | undefined;
+  } | null): string | undefined;
+}
+
+/**
+ * I_SlinkConsole provides the ability to stub out console.log
+ * for testing
+ */
+export interface I_SlinkConsole {
+  out(message: string): void;
+}
+
+/**
+ * I_Proc provides the ability to stub out process.env and process.env.SHELL
+ * for testing
+ */
+export interface I_Proc {
+  /**
+   * wrapps process.argv
+   */
+  argv(): string[];
+
+  /**
+   * the Current Working Directory
+   * wrapps process.cws
+   */
+  cwd(): string;
+  /**
+   * wrapps process.env
+   */
+  env(): any;
+
+  /**
+   * wrapps process.env[name]
+   * @param name
+   */
+  envVar(name: string): string;
+    /**
+   * wrapps process.env.SHELL
+   */
+  shell(): string;
+}
+
+export interface I_SpawnSync {
+  spawnSync(command: string, args?: ReadonlyArray<string>, options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>>;
+}
+
+// ################################ Stubs ###########################################
+export class SlinkConsoleStub implements I_SlinkConsole {
+  out(message: string) {
+    outStatic(message)
+  }
+}
+
+export class SpawnSyncStub implements I_SpawnSync {
+  spawnSync(command: string, args?: ReadonlyArray<string>, options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
+    return spawnSync(command, args, options);
+  }
+}
+
+export class FsStub implements I_Fs {
+  appendFileSync(
+      path: fs.PathOrFileDescriptor,
+      data: string | Uint8Array,
+      options?: fs.WriteFileOptions,
+  ): void {
+    fs.appendFileSync(path, data, options);
+  }
+
+  public readFileSync(path: fs.PathOrFileDescriptor, options?: {
+      encoding?: null | undefined;
+      flag?: string | undefined;
+  } | null): string {
+    return fs.readFileSync(path, options).toString();
+  }
+}
+
+/**
+ * @see {@link I_Proc}
+ */
+export class ProcStub implements I_Proc {
+  /**
+   * @see {@link I_Proc#argv}
+   */
+  argv(): any {
+    return process.argv;
+  }
+  /**
+  * @see {@link I_Proc#cwd}
+  */
+  cwd(): string {
+    return process.cwd();
+  }
+  /**
+   * @see {@link I_Proc#env}
+   */
+  env(): any {
+    return process.env;
+  }
+
+  /**
+   * @see {@link I_Proc#envVar}
+   */
+  envVar(name: string): string {
+    return process.env[name];
+  }
+  /**
+   * @see {@link I_Proc#shell}
+   */
+  shell(): string {
+    return process.env.SHELL;
+  }
+}
+
+// ################################### Interface Implementation Constants  #########################################
+export const outStatic  = (message) => console.log(message);
+
+export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true, letter: "d" }
+export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: false, letter: "l" }
+export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output.", flag: true, letter: "h" }
+export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
+
+export const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
+      "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
+export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, VERSION];
+
+// ################################## Classes ###########################################
+export class ShellRunner {
+  cmdLog: I_CmdLog;
+  debug: boolean = false;
+  console: I_SlinkConsole;
+  proc: I_Proc = new ProcStub();
+  sSync?: I_SpawnSync = new SpawnSyncStub();
+
+  constructor(cmdLog: I_CmdLog, console: I_SlinkConsole, debug?: boolean, mockSpawnSync?: I_SpawnSync, mockProcess?: I_Proc) {
+    this.cmdLog = cmdLog;
+    if (debug != undefined) {
+      this.debug = debug;
+    }
+    this.console = console;
+    if (mockSpawnSync != undefined) {
+      this.sSync = mockSpawnSync;
+    }
+    if (mockProcess != undefined) {
+      this.proc = mockProcess;
+    }
+  }
+
+  public run(cmd: string, args: string[], options?: any): any {
+    var cc = cmd;
+    if (args != undefined) {
+      for (var i = 0; i < args.length; i++) {
+        cc = cc + ' ' + args[i];
+      }
+    }
+    //Execute fork to GitBash from GitBash execution
+    if (options == undefined) {
+      options = new Object();
+
+      options.shell = this.proc.shell();
+      if (this.debug) {
+        this.console.out('New options, running with shell is ' + options.shell);
+      }
+    } else {
+      if (options.keepShell == undefined || options.keepShell == false) {
+        options.shell = this.proc.shell();
+      }
+      if (this.debug) {
+        this.console.out('Running with shell is ' + options.shell);
+      }
+    }
+    //stubbed for unit testing
+    var ssr: any = this.sSync.spawnSync(cmd, args, options);
+    this.cmdLog.logCmd(cc, ssr, options);
+    return ssr;
+  }
+}
+
+
+const IS_WINDOWS = process.platform === "win32";
+export function getPathSeperator() {
+  if (IS_WINDOWS) {
+    return '\\';
+  } else {
+    return '/';
+  }
 }
 
 export class CliCtxFlag {
@@ -171,239 +322,41 @@ export class CliCtxArg {
   getFlag(): CliCtxFlag { return this.flag }
 }
 
-export class Path {
-  private relative: boolean;
-  private parts: string[];
-  private windows: boolean;
 
-  constructor(parts: string[], relative?: boolean, windows?: boolean) {
-    if (relative == undefined) {
-      this.relative = false;
-    } else {
-      this.relative = relative;
-    }
-    this.parts = parts;
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i] == undefined) {
-        throw Error('Parts must have valid strings! ' + parts);
-      }
-    }
-    if (windows == undefined) {
-      this.windows = false;
-    } else {
-      this.windows = windows;
-    }
-  }
-
-  isRelative(): boolean { return this.relative; }
-  isWindows(): boolean { return this.windows; }
-  getParts(): string[] { return this.parts.slice(0, this.parts.length); }
-  toString(): string { return 'Path [parts=' + this.parts + ', relative=' + this.relative + ', windows=' + this.windows + ']' }
-  toPathString(): string {
-    var r: string = '';
-    if (this.windows) {
-      if (this.relative) {
-        r = r.concat(this.parts[0] + '\\');
-        return this.concat(r, '\\');
-      } else {
-        r = r.concat(this.parts[0] + ':\\');
-        return this.concat(r, '\\');
-      }
-    } else {
-      if (this.relative) {
-        return this.concat(r, '/');
-      } else {
-        r = r.concat('/');
-        return this.concat(r, '/');
-      }
-    }
-  }
-
-  private concat(start: string, sep: string): string {
-    var r: string = start;
-    if (this.isWindows()) {
-      for (var i = 1; i < this.parts.length; i++) {
-        if (this.parts.length - 1 == i) {
-          r = r.concat(this.parts[i]);
-        } else {
-          r = r.concat(this.parts[i]).concat(sep);
-        }
-      }
-      return r;
-    } else {
-      for (var i = 0; i < this.parts.length; i++) {
-        if (this.parts.length - 1 == i) {
-          r = r.concat(this.parts[i]);
-        } else {
-          r = r.concat(this.parts[i]).concat(sep);
-        }
-      }
-      return r;
-    }
-  }
-}
-export class Paths {
-
-  static find(parts: Path, relativePath: Path): Path {
-    var dd: number = 0;
-    let rpp: string[] = relativePath.getParts();
-    for (var i = 0; i < rpp.length; i++) {
-      if (rpp[i] == '..') {
-        dd++;
-      }
-    }
-    let pp: string[] = parts.getParts();
-    //console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
-    let root = pp.slice(0, pp.length - dd);
-    //console.log('Root is: ' + root);
-    var r = root;
-    for (var i = 0; i < rpp.length; i++) {
-      if (rpp[i] != '..') {
-        r = r.concat(rpp[i]);
-      }
-    }
-    //console.log('New relative path is\n\t' + r);
-    return new Path(r, false);
-  }
-
-  static findPath(path: string, relativePath: Path): Path {
-    return this.find(this.toParts(path, false), relativePath);
-  }
-
-  static toOs(parts: Path): string {
-    if (IS_WINDOWS) {
-      return this.toWindows(parts);
-    } else {
-      return this.toUnix(parts);
-    }
-  }
-
-  static toOsPath(path: string): string {
-    return this.toOs(this.toParts(path, false));
-  }
-
-
-  /**
-  * @param a path, which could be 
-  * a windows path (i.e. C:\User\scott ), 
-  * a unix path (/home/scott)
-  * or a gitbash path (i.e. C:/Users/scott)
-  * Because of this spaces are NOT allowed.
-  */
-  static toParts(path: string, relative: boolean): Path {
-    let r: string[] = new Array();
-    let b = '';
-    var j = 0;
-    var i = 0;
-    var winPath: boolean = false;
-    if (path.length >= 1) {
-      if (path.charAt(1) == ':') {
-        //it's a windows path
-        r[0] = path.charAt(0);
-        j++;
-        i = 3;
-        winPath = true;
-      }
-    }
-    for (; i < path.length; i++) {
-      let c = path[i];
-      if (c == '\\') {
-        if (b.length != 0) {
-          r[j] = b;
-          b = '';
-          j++;
-        }
-      } else if (c == '/') {
-        if (b.length != 0) {
-          r[j] = b;
-          b = '';
-          j++;
-        }
-      } else if (c == ' ') {
-        throw Error('Spaces are NOT allowed in paths, due to portability issues.  The following path is invaid;\n\t' + path)
-      } else {
-        b = b.concat(c);
-      }
-    }
-    r[j] = b;
-    if (relative == undefined) {
-      return new Path(r, false);
-    } else if (relative) {
-      return new Path(r, relative);
-    } else {
-      return new Path(r, relative);
-    }
-  }
-
-  static toUnix(parts: Path): string {
-    let b = '';
-    if (!parts.isRelative()) {
-      b = '/';
-    }
-    let pp: string[] = parts.getParts();
-    for (var i = 0; i < pp.length; i++) {
-      let p = pp[i];
-      if (i == pp.length - 1) {
-        b = b.concat(p);
-      } else {
-        b = b.concat(p).concat('/');
-      }
-    }
-    return b;
-  }
-  static toUnixPath(path: string): string {
-    return this.toUnix(this.toParts(path, false));
-  }
-
-
-  static toWindows(parts: Path): string {
-    let b = '';
-    let pp: string[] = parts.getParts();
-    for (var i = 0; i < pp.length; i++) {
-      if (i == 0) {
-        if (pp[0].length == 1) {
-          b = pp[0].toUpperCase() + ':\\';
-        } else {
-          b = pp[0].concat('\\');
-        }
-      } else if (i == pp.length - 1) {
-        b = b.concat(pp[i]);
-      } else {
-        b = b.concat(pp[i]).concat('\\');
-      }
-    }
-    return b;
-  }
-  static toWindowsPath(parts: string): string {
-    return this.toWindows(this.toParts(parts, false));
-  }
-}
-
-export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true }
-export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: true }
-export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output." }
-export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
-
-export class CliCtxLog {
+export class CliCtxLog implements I_CliCtxLog {
   private fileName?: string;
   private messages: string[] = new Array();
+  private fsM: I_Fs;
+
+  constructor(fs?: I_Fs) {
+    if (fs == undefined) {
+      this.fsM = new FsStub();
+    } else {
+      this.fsM = fs;
+    }
+  }
 
   log(message: string) {
     if (this.fileName == undefined) {
       this.messages = this.messages.concat(message);
     } else {
-      fs.appendFileSync(this.fileName, message);
+      this.fsM.appendFileSync(this.fileName, message);
     }
   }
+
   setFileName(fileName: string) {
     this.fileName = fileName;
-    if (this.messages.length > - 1) {
+    if (this.messages.length > -1) {
       this.messages.forEach((m) => {
-        fs.appendFileSync(this.fileName, m);
+        this.fsM.appendFileSync(this.fileName, m);
       });
     }
   }
 }
+
+/**
+ * This class acts as the main hub for test stubbing
+ */
 export class CliCtx implements I_CmdLog {
   private done: boolean = false;
   /**
@@ -411,12 +364,12 @@ export class CliCtx implements I_CmdLog {
    * sometime you need to pass it in.
    */
   private dir: Path;
-  private i_out: I_Out;
-  private log: CliCtxLog;
+  private console: I_SlinkConsole;
+  private log: I_CliCtxLog;
   private shellRun: ShellRunner;
   private fsc: FsContext;
   private fs: I_Fs;
-  
+  private procIn: I_Proc;
   /**
    * this is the home directory where your application is installed,
    * in the npm shared space of your computer
@@ -427,16 +380,40 @@ export class CliCtx implements I_CmdLog {
   /**
    * 
    * @param flags 
-   * @param args 
-   * @param belowRoot this is an integer which identifies the number of 
-   *   path parts below the projects (npm module) root root the actual
-   *   CLI script is.  This defaults to 1 for scripts in the src dir.
-   * @param out 
+   * @param args
+   * @param log The log to delegate to
+   * @param console The console interface to print messages directly
+   * @param fs
+   * @param proc a wrapper around 'proccess' to stub out things like 'process.env'
    */
-  constructor(flags: I_CliCtxFlag[], args?: string[], belowRoot?: number, log?: CliCtxLog, out?: I_Out, fsc?: FsContext) {
-    if (args == undefined) {
-      args = process.argv;
+  constructor(flags: I_CliCtxFlag[], args?: string[], log?: I_CliCtxLog, console?: I_SlinkConsole, fs?: I_Fs, proc?: I_Proc) {
+    // do proc and args
+    if (proc != undefined) {
+      this.procIn = proc;
+    } else {
+      this.procIn = new ProcStub();
     }
+    if (args == undefined) {
+      args = this.procIn.argv();
+    }
+
+    // do additional constructor parameter assignments in constructor order
+    if (log == undefined) {
+      this.log = new CliCtxLog();
+    } else {
+      this.log = log;
+    }
+    if (console != undefined) {
+      this.console = console;
+    } else {
+      this.console = new SlinkConsoleStub();
+    }
+    if (fs != undefined) {
+      this.fsc = new FsContext(this, fs);
+    } else {
+      this.fsc = new FsContext(this, new FsStub());
+    }
+    this.fs = this.fsc.getFs();
     // When even --debug and --version aren't working
     /*
     console.warn('1.3.7 process.argv are ' + process.argv);
@@ -445,26 +422,11 @@ export class CliCtx implements I_CmdLog {
       console.warn('args are ' + JSON.stringify(args));
     }
     */
-    if (belowRoot == undefined) {
-      belowRoot = 1;
-    }
-    if (out == undefined) {
-      out = (message) => console.log(message);
-    }
-    if (log == undefined) {
-      this.log = new CliCtxLog();
-    }
-    if (fsc != undefined) {
-      this.fsc = fsc;
-    } else {
-      this.fsc = new FsContext(this, new FsStub());
-    }
-    this.fs = this.fsc.getFs();
-    if (this.fs == undefined) {
-      throw new Error("Illegal state this.fs in CliCtx must be a object!");
-    }
-    this.shellRun = new ShellRunner(this, out, this.map.has('debug'));
-    this.i_out = out;
+
+
+
+    this.shellRun = new ShellRunner(this, this.console, this.isDebug());
+
     let allFlags: CliCtxFlag[] = new Array(flags.length);
     let map2Cmds: Map<string, CliCtxFlag> = new Map();
     let map2Letters: Map<string, CliCtxFlag> = new Map();
@@ -500,30 +462,22 @@ export class CliCtx implements I_CmdLog {
           if (flag == undefined) {
             throw new Error('No flag found for command ' + cmd);
           }
-          if (flag.isFlag()) {
-            this.map.set(cmd, new CliCtxArg(flag));
-          } else if (i + 1 < args.length) {
-            let arg = args[i + 1];
-            i++;
-            this.map.set(cmd, new CliCtxArg(flag, arg));
-          } else {
-            throw Error('The following command line argument expects an additional argument; ' + cmd);
-          }
+          i = this.addCliCtxArg(flag, cmd, i, args);
         } else if (a.charAt(0) == '-') {
           //process letters
           for (var j = 1; j < a.length; j++) {
             let l = a.charAt(j);
             //out('processing letter ' + l);
             let flag: CliCtxFlag = map2Letters.get(l);
-            //out('got command ' + flag.getCmd() + ' for letter ' + l);
-            this.map.set(flag.getCmd(), new CliCtxArg(flag));
+            i = this.addCliCtxArg(flag, flag.getCmd(), i, args);
           }
         } else {
           throw Error('Unable to process command line argument ; ' + a);
         }
       }
     }
-    if (this.map.has('debug')) {
+    if (this.isDebug()) {
+      this.out("Debug is enabled!");
       this.out('Processing commands HELP and VERSION with ' + JSON.stringify(this.map));
       let val = this.map.get(VERSION.cmd);
       if (val == undefined) {
@@ -534,24 +488,21 @@ export class CliCtx implements I_CmdLog {
     }
     if (this.map.get(HELP.cmd) != undefined) {
       //print the help menu;
-      out('This program understands the following commands;\n');
+      this.console.out('This program understands the following commands;\n');
       for (var i = 0; i < flags.length; i++) {
         let flag: I_CliCtxFlag = flags[i];
         var m = '\t--' + flag.cmd;
         if (flag.letter != undefined) {
           m = m + ' / -' + flag.letter;
         }
-        out(m);
+        this.console.out(m);
         if (flag.description != undefined) {
-          out('\t\t' + flag.description);
+          this.console.out('\t\t' + flag.description);
         }
       }
       this.done = true;
     } else if (this.map.get(VERSION.cmd) != undefined) {
-      //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
-      // also update this in the package.json file
-      // package.json.version
-      out("1.4.3");
+      this.console.out(VERSION_NBR);
       /*
       console.log('Trying to read the version number from the slink install package.json at');
       console.log('this.home = ' + this.home + " + package.json");
@@ -569,18 +520,35 @@ export class CliCtx implements I_CmdLog {
       this.done = true;
     }
   }
+
+  private addCliCtxArg(flag: CliCtxFlag, cmd: string, i: number, args: string[]) {
+    if (flag.isFlag()) {
+      this.map.set(cmd, new CliCtxArg(flag));
+    } else if (i + 1 < args.length) {
+      let arg = args[i + 1];
+      i++;
+      this.map.set(cmd, new CliCtxArg(flag, arg));
+    } else {
+      throw Error('The following command line argument expects an additional argument; ' + cmd);
+    }
+    return i;
+  }
+
   getDir(): Path { return this.dir; }
-  getHome(): Path { return this.home; }
+  public getKeys(): string [] {  return Array.from(this.map.keys());  }
+  public getValue(key: string): CliCtxArg {  return this.map.get(key);  }
+  public getHome(): Path { return this.home; }
   public run(cmd: string, args: string[], options?: any): any {
     return this.shellRun.run(cmd, args, options);
   }
 
   isBash(): boolean {
+    let shell = this.procIn.shell();
     if (this.map.has(DEBUG.cmd)) {
-      out('process.env.SHELL is ' + process.env.SHELL);
+      this.out('process.env.SHELL is ' + shell);
     }
-    if (process.env.SHELL != undefined) {
-      if (process.env.SHELL.toLocaleLowerCase().includes('bash')) {
+    if (shell != undefined) {
+      if (shell.toLocaleLowerCase().includes('bash')) {
         return true;
       }
     }
@@ -588,6 +556,7 @@ export class CliCtx implements I_CmdLog {
   }
   isDebug(): boolean { return this.map.has(DEBUG.cmd); }
   isDone(): boolean { return this.done; }
+  public isInMap(key: string): boolean {  return this.map.has(key);  }
   isWindows(): boolean { return IS_WINDOWS; }
 
 
@@ -598,24 +567,30 @@ export class CliCtx implements I_CmdLog {
    */
   out(message: string) {
     if (this.map.has(DEBUG.cmd)) {
-      console.log(message);
-    }
-    if (this.map.has(LOG.cmd)) {
-      this.log.log(message + '\n');
+      if (this.map.has(LOG.cmd)) {
+        this.log.log(message);
+      }
+      this.console.out(message);
+    } else if (this.map.has(LOG.cmd)) {
+      this.log.log(message);
     }
   }
-  print(message: string) { console.log(message); }
+  print(message: string) { this.out(message) }
+
+  proc(): I_Proc {
+    return this.procIn;
+  }
   setDir(): void {
     let arg: CliCtxArg = this.map.get(DIR.cmd);
     var dir: string = process.cwd();
     if (arg == undefined) {
       if (this.map.has('trace')) {
-        out('process.env is ' + JSON.stringify(process.env));
+        this.out('process.env is ' + JSON.stringify(process.env));
       }
       if (process.env.PWD != undefined) {
         var dir: string = process.env.PWD;
         if (this.map.has('debug')) {
-          out('process.env.PWD is ' + dir);
+          this.out('process.env.PWD is ' + dir);
         }
       }
       if (dir == undefined) {
@@ -625,24 +600,17 @@ export class CliCtx implements I_CmdLog {
       dir = this.map.get(DIR.cmd).getArg();
     }
     if (this.map.has('debug')) {
-      out('before toOsPath CliCtx.dir is ' + dir);
+      this.out('before toOsPath CliCtx.dir is ' + dir);
     }
     this.dir = Paths.toParts(dir, false);
-    if (this.map.has('debug')) {
-      out('after toOsPath CliCtx.dir is ' + this.dir.toString());
+    if (this.isDebug()) {
+      this.out('after toOsPath CliCtx.dir is ' + this.dir.toString());
     }
     if (this.map.has(LOG.cmd)) {
       let logFileName = new Path(this.dir.getParts().concat('slink.log'), false, IS_WINDOWS).toPathString();
-      out('writing to logfile ' + logFileName);
+      this.out('writing to logfile ' + logFileName);
       this.log.setFileName(logFileName);
     }
-  }
-
-  public inMap(key: string): boolean {
-    if (this.map.has(key)) {
-      return true;
-    }
-    return false;
   }
 
   public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any): void {
@@ -870,7 +838,7 @@ export class FsContext {
       if (ctx.isDebug()) {
         ctx.print("Linking to " + toDirP);
       }
-      var options = { cwd: Paths.toWindows(inDir), shell: windowCmdPath, keepShell: true }
+      var options = { cwd: Paths.toWindows(inDir), shell: WINDOWS_CMD_PATH, keepShell: true }
       //var options ={ cwd:  Paths.toUnix(inDir), shell: process.env.SHELL}
       if (ctx.isDebug()) {
         ctx.out("Using shell " + options.shell + " in Windows dir " + options.cwd);
@@ -882,15 +850,6 @@ export class FsContext {
       ctx.run('ln', ['-s', '-T', Paths.toUnix(toDir), slinkName], { cwd: Paths.toUnix(inDir) });
     }
   }
-}
-export interface I_DependencySLinkGroup {
-  group: string;
-  projects: I_DependencySLinkProject[];
-}
-
-export interface I_DependencySLinkProject {
-  project: string;
-  modulePath: string;
 }
 
 export class DependencySLinkGroup {
@@ -938,12 +897,6 @@ export class DependencySLinkProject {
   }
 }
 
-export interface I_DependencySrcSLink {
-  project: string;
-  srcPath: string;
-  destPath: string;
-}
-
 export class DependencySrcSLink {
   private unixIn: string;
   private unixTo: string;
@@ -968,6 +921,215 @@ export class DependencySrcSLink {
   toString(): string {
     return 'DependencySLink [name=\'' + this.name + '\', unixIn=\'' + this.unixIn +
       '\', unixTo=\'' + this.unixTo + '\']';
+  }
+}
+
+
+export class Path {
+  private relative: boolean;
+  private parts: string[];
+  private windows: boolean;
+
+  constructor(parts: string[], relative?: boolean, windows?: boolean) {
+    if (relative == undefined) {
+      this.relative = false;
+    } else {
+      this.relative = relative;
+    }
+    this.parts = parts;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] == undefined) {
+        throw Error('Parts must have valid strings! ' + parts);
+      }
+    }
+    if (windows == undefined) {
+      this.windows = false;
+    } else {
+      this.windows = windows;
+    }
+  }
+
+  isRelative(): boolean { return this.relative; }
+  isWindows(): boolean { return this.windows; }
+  getParts(): string[] { return this.parts.slice(0, this.parts.length); }
+  toString(): string { return 'Path [parts=' + this.parts + ', relative=' + this.relative + ', windows=' + this.windows + ']' }
+  toPathString(): string {
+    var r: string = '';
+    if (this.windows) {
+      if (this.relative) {
+        r = r.concat(this.parts[0] + '\\');
+        return this.concat(r, '\\');
+      } else {
+        r = r.concat(this.parts[0] + ':\\');
+        return this.concat(r, '\\');
+      }
+    } else {
+      if (this.relative) {
+        return this.concat(r, '/');
+      } else {
+        r = r.concat('/');
+        return this.concat(r, '/');
+      }
+    }
+  }
+
+  private concat(start: string, sep: string): string {
+    var r: string = start;
+    if (this.isWindows()) {
+      for (var i = 1; i < this.parts.length; i++) {
+        if (this.parts.length - 1 == i) {
+          r = r.concat(this.parts[i]);
+        } else {
+          r = r.concat(this.parts[i]).concat(sep);
+        }
+      }
+      return r;
+    } else {
+      for (var i = 0; i < this.parts.length; i++) {
+        if (this.parts.length - 1 == i) {
+          r = r.concat(this.parts[i]);
+        } else {
+          r = r.concat(this.parts[i]).concat(sep);
+        }
+      }
+      return r;
+    }
+  }
+}
+export class Paths {
+
+  static find(parts: Path, relativePath: Path): Path {
+    var dd: number = 0;
+    let rpp: string[] = relativePath.getParts();
+    for (var i = 0; i < rpp.length; i++) {
+      if (rpp[i] == '..') {
+        dd++;
+      }
+    }
+    let pp: string[] = parts.getParts();
+    //console.log('In find with dd ' + dd + '\n\tpath: ' + parts + '\n\trelativepath: ' + relativePath);
+    let root = pp.slice(0, pp.length - dd);
+    //console.log('Root is: ' + root);
+    var r = root;
+    for (var i = 0; i < rpp.length; i++) {
+      if (rpp[i] != '..') {
+        r = r.concat(rpp[i]);
+      }
+    }
+    //console.log('New relative path is\n\t' + r);
+    return new Path(r, false);
+  }
+
+  static findPath(path: string, relativePath: Path): Path {
+    return this.find(this.toParts(path, false), relativePath);
+  }
+
+  static toOs(parts: Path): string {
+    if (IS_WINDOWS) {
+      return this.toWindows(parts);
+    } else {
+      return this.toUnix(parts);
+    }
+  }
+
+  static toOsPath(path: string): string {
+    return this.toOs(this.toParts(path, false));
+  }
+
+
+  /**
+   * @param a path, which could be
+   * a windows path (i.e. C:\User\scott ),
+   * a unix path (/home/scott)
+   * or a gitbash path (i.e. C:/Users/scott)
+   * Because of this spaces are NOT allowed.
+   */
+  static toParts(path: string, relative: boolean): Path {
+    let r: string[] = new Array();
+    let b = '';
+    var j = 0;
+    var i = 0;
+    var winPath: boolean = false;
+    if (path.length >= 1) {
+      if (path.charAt(1) == ':') {
+        //it's a windows path
+        r[0] = path.charAt(0);
+        j++;
+        i = 3;
+        winPath = true;
+      }
+    }
+    for (; i < path.length; i++) {
+      let c = path[i];
+      if (c == '\\') {
+        if (b.length != 0) {
+          r[j] = b;
+          b = '';
+          j++;
+        }
+      } else if (c == '/') {
+        if (b.length != 0) {
+          r[j] = b;
+          b = '';
+          j++;
+        }
+      } else if (c == ' ') {
+        throw Error('Spaces are NOT allowed in paths, due to portability issues.  The following path is invaid;\n\t' + path)
+      } else {
+        b = b.concat(c);
+      }
+    }
+    r[j] = b;
+    if (relative == undefined) {
+      return new Path(r, false);
+    } else if (relative) {
+      return new Path(r, relative);
+    } else {
+      return new Path(r, relative);
+    }
+  }
+
+  static toUnix(parts: Path): string {
+    let b = '';
+    if (!parts.isRelative()) {
+      b = '/';
+    }
+    let pp: string[] = parts.getParts();
+    for (var i = 0; i < pp.length; i++) {
+      let p = pp[i];
+      if (i == pp.length - 1) {
+        b = b.concat(p);
+      } else {
+        b = b.concat(p).concat('/');
+      }
+    }
+    return b;
+  }
+  static toUnixPath(path: string): string {
+    return this.toUnix(this.toParts(path, false));
+  }
+
+
+  static toWindows(parts: Path): string {
+    let b = '';
+    let pp: string[] = parts.getParts();
+    for (var i = 0; i < pp.length; i++) {
+      if (i == 0) {
+        if (pp[0].length == 1) {
+          b = pp[0].toUpperCase() + ':\\';
+        } else {
+          b = pp[0].concat('\\');
+        }
+      } else if (i == pp.length - 1) {
+        b = b.concat(pp[i]);
+      } else {
+        b = b.concat(pp[i]).concat('\\');
+      }
+    }
+    return b;
+  }
+  static toWindowsPath(parts: string): string {
+    return this.toWindows(this.toParts(parts, false));
   }
 }
 
@@ -1105,15 +1267,17 @@ export class SLinkRunner {
             this.ctx.run('npm', ['install'], { cwd: Paths.toOs(projectPath) });
           }
 
-          // Remove existing node_modules if it exists
-          this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
+          if (!this.fsCtx.existsAbs(nodeModulesPath)) {
+            // Remove existing node_modules if it exists
+            this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
 
-          // Create symlink to the project's node_modules
-          if (this.ctx.isDebug()) {
-            this.ctx.out(`Creating symlink from node_modules to ${Paths.toOs(nodeModulesPath)}`);
+            // Create symlink to the project's node_modules
+            if (this.ctx.isDebug()) {
+              this.ctx.out(`Creating symlink from node_modules to ${Paths.toOs(nodeModulesPath)}`);
+            }
+            this.fsCtx.slink('node_modules', nodeModulesPath, this.ctx.getDir());
+            return; // Use the first valid project
           }
-          this.fsCtx.slink('node_modules', nodeModulesPath, this.ctx.getDir());
-          return; // Use the first valid project
         } else {
           if (this.ctx.isDebug()) {
             this.ctx.out(`Project ${projectName} not found at ${Paths.toOs(projectPath)}`);
@@ -1184,16 +1348,12 @@ export class SLinkRunner {
   }
 }
 
-// Replace the main script with the SLinkRunner
-export const DEFAULT: I_CliCtxFlag = {cmd: "default", description: "Deletes stuff in node_modules and adds the symbolic links\n" +
-      "\t\tdetails are here;\n" +
-      "\t\thttps://github.com/adligo/slink.ts.adligo.org", flag: true, letter: "d"}
-export const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
-      "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
-export let flags: I_CliCtxFlag[] = [DEBUG, DIR, DEFAULT, LOG, HELP, VERSION];
-export let ctx = new CliCtx(flags, process.argv, 2);
+// ###################################### Main Script Execution ####################################
+export let ctx = new CliCtx(FLAGS, process.argv);
 
+console.log('in slink starting runner.run()');
+console.log(process.argv);
 // Create and run the SLinkRunner
-const runner = new SLinkRunner(ctx);
+let runner = new SLinkRunner(ctx);
 runner.run();
 

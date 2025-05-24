@@ -1,7 +1,7 @@
 {
   "author": "Adligo Inc / Scott Morgan",
   "bin": {
-    "slink": "./dist/slink.js"
+    "slink": "./dist/slink.mjs"
   },
   "bugs": {
     "url": "https://github.com/adligo/slink.ts.adligo.org/issues"
@@ -14,7 +14,7 @@
     "npm"
   ],
   "devDependencies": {
-    "@types/node": "^18.16.0",
+    "@types/node": "^18.19.103",
     "child_process": "^1.0.2",
     "typescript": "^5.0.3"
   },
@@ -28,7 +28,7 @@
   ],
   "license": "Apache-2.0",
   "name": "@ts.adligo.org/slink",
-  "main": "./src/slink.ts",
+  "main": "src/slink.mts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adligo/slink.ts.adligo.org.git"
@@ -47,5 +47,5 @@
   ],
   "type": "commonjs",
   "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.4.3"
+  "version": "1.4.4"
 }
