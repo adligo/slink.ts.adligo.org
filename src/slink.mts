@@ -17,18 +17,51 @@
 import {Buffer} from 'buffer';
 import * as fs from 'fs';
 import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
+import {log} from "node:util";
 
 // ###########################  Constants ################################
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.4.5";
+export const VERSION_NBR: string = "1.4.5.3";
 export const WINDOWS_CMD_PATH = 'C:\\Windows\\system32\\cmd';
 
 
 // ########################### Interfaces ##################################
-export interface I_CmdLog {
-  logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any): void;
+export interface I_CliCtx {
+  getDir(): Path;
+
+  getFs(): I_Fs;
+
+  getKeys(): string[];
+
+  getValue(key: string): CliCtxArg;
+
+  getHome(): Path;
+
+  run(cmd: string, args: string[], options?: any, logLevel?: number): any;
+
+  isBash(): boolean;
+
+  isDebug(): boolean;
+
+  isDone(): boolean;
+
+  isInMap(key: string): boolean;
+
+  isWindows(): boolean;
+
+  getProc(): I_Proc;
+  /**
+   * Checks if the context is set to debug
+   * and if so prints the message, if you want to print regarless use print
+   * @param message
+   */
+  out(message: string): void;
+
+  print(message: string): void;
+
+  setDir(): void;
 }
 
 /**
@@ -69,6 +102,10 @@ export interface I_DependencySLinkGroup {
   projects: I_DependencySLinkProject[];
 }
 
+export interface I_CmdLog {
+  logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any, logLevel?: number): void;
+}
+
 /**
  * @deprecated remove in 2030
  */
@@ -92,21 +129,27 @@ export interface I_DependencySrcSLink {
  */
 export interface I_Fs {
   appendFileSync(
-      path: fs.PathOrFileDescriptor,
-      data: string | Uint8Array,
-      options?: fs.WriteFileOptions,
+    path: fs.PathOrFileDescriptor,
+    data: string | Uint8Array,
+    options?: fs.WriteFileOptions,
   ): void;
 
+  /*
+doesn't work hmm
+existsSync(
+    path: fs.PathLike,
+): boolean;
+*/
   readFileSync(path: fs.PathOrFileDescriptor, options?: {
-      encoding?: null | undefined;
-      flag?: string | undefined;
+    encoding?: null | undefined;
+    flag?: string | undefined;
   } | null): string | undefined;
 }
 
 /**
- * I_SlinkConsole provides the ability to stub out console.log
- * for testing
- */
+* I_SlinkConsole provides the ability to stub out console.log
+* for testing
+*/
 export interface I_SlinkConsole {
   out(message: string): void;
 }
@@ -136,9 +179,9 @@ export interface I_Proc {
    * @param name
    */
   envVar(name: string): string;
-    /**
-   * wrapps process.env.SHELL
-   */
+  /**
+ * wrapps process.env.SHELL
+ */
   shell(): string;
 }
 
@@ -161,16 +204,25 @@ export class SpawnSyncStub implements I_SpawnSync {
 
 export class FsStub implements I_Fs {
   appendFileSync(
-      path: fs.PathOrFileDescriptor,
-      data: string | Uint8Array,
-      options?: fs.WriteFileOptions,
+    path: fs.PathOrFileDescriptor,
+    data: string | Uint8Array,
+    options?: fs.WriteFileOptions,
   ): void {
     fs.appendFileSync(path, data, options);
   }
 
+  /*
+  doesn't work hmm
+  existsSync(
+      path: fs.PathLike,
+  ): boolean {
+    return fs.existsSync(path);
+  }
+   */
+
   public readFileSync(path: fs.PathOrFileDescriptor, options?: {
-      encoding?: null | undefined;
-      flag?: string | undefined;
+    encoding?: null | undefined;
+    flag?: string | undefined;
   } | null): string {
     return fs.readFileSync(path, options).toString();
   }
@@ -214,17 +266,26 @@ export class ProcStub implements I_Proc {
 }
 
 // ################################### Interface Implementation Constants  #########################################
-export const outStatic  = (message) => console.log(message);
+export const outStatic = (message) => console.log(message);
 
 export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true, letter: "d" }
 export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: false, letter: "l" }
 export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output.", flag: true, letter: "h" }
 export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
 
-export const DIR: I_CliCtxFlag = {cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
-      "conventionally through --dir `pwd`.  Note the Backticks.", flag: false}
+export const DIR: I_CliCtxFlag = {
+  cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
+    "conventionally through --dir `pwd`.  Note the Backticks.", flag: false
+}
 export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, VERSION];
 
+export enum LogLevel {
+  TRACE = 0,
+  DEBUG = 1,
+  INFO = 2,
+  WARN = 3,
+  ERROR = 4
+}
 // ################################## Classes ###########################################
 export class ShellRunner {
   cmdLog: I_CmdLog;
@@ -232,8 +293,9 @@ export class ShellRunner {
   console: I_SlinkConsole;
   proc: I_Proc = new ProcStub();
   sSync?: I_SpawnSync = new SpawnSyncStub();
+  logLevel: number = LogLevel.INFO;
 
-  constructor(cmdLog: I_CmdLog, console: I_SlinkConsole, debug?: boolean, mockSpawnSync?: I_SpawnSync, mockProcess?: I_Proc) {
+  constructor(cmdLog: I_CmdLog, console: I_SlinkConsole, debug?: boolean, mockSpawnSync?: I_SpawnSync, mockProcess?: I_Proc, logLevel?: number) {
     this.cmdLog = cmdLog;
     if (debug != undefined) {
       this.debug = debug;
@@ -245,34 +307,42 @@ export class ShellRunner {
     if (mockProcess != undefined) {
       this.proc = mockProcess;
     }
+    if (logLevel != undefined) {
+      this.logLevel = logLevel;
+    }
   }
 
-  public run(cmd: string, args: string[], options?: any): any {
+  public run(cmd: string, args: string[], options?: any, logLevel?: number): any {
     var cc = cmd;
     if (args != undefined) {
       for (var i = 0; i < args.length; i++) {
         cc = cc + ' ' + args[i];
       }
     }
+    let ll = this.logLevel >= logLevel ? this.logLevel : logLevel;
     //Execute fork to GitBash from GitBash execution
     if (options == undefined) {
       options = new Object();
 
       options.shell = this.proc.shell();
-      if (this.debug) {
+      if (ll <= LogLevel.DEBUG) {
         this.console.out('New options, running with shell is ' + options.shell);
       }
     } else {
       if (options.keepShell == undefined || options.keepShell == false) {
         options.shell = this.proc.shell();
       }
-      if (this.debug) {
+      if (ll <= LogLevel.DEBUG) {
         this.console.out('Running with shell is ' + options.shell);
       }
     }
+    if (ll <= LogLevel.DEBUG) {
+      this.console.out('Running with ll ' + ll + " this.ll is " + this.logLevel + " fun ll is " + logLevel );
+    }
     //stubbed for unit testing
     var ssr: any = this.sSync.spawnSync(cmd, args, options);
-    this.cmdLog.logCmd(cc, ssr, options);
+
+    this.cmdLog.logCmd(cc, ssr, options, ll);
     return ssr;
   }
 }
@@ -354,10 +424,11 @@ export class CliCtxLog implements I_CliCtxLog {
   }
 }
 
+
 /**
  * This class acts as the main hub for test stubbing
  */
-export class CliCtx implements I_CmdLog {
+export class CliCtx implements I_CmdLog, I_CliCtx {
   private done: boolean = false;
   /**
    * This is the current working directory of your shell, if possible
@@ -534,12 +605,28 @@ export class CliCtx implements I_CmdLog {
     return i;
   }
 
-  getDir(): Path { return this.dir; }
-  public getKeys(): string [] {  return Array.from(this.map.keys());  }
-  public getValue(key: string): CliCtxArg {  return this.map.get(key);  }
-  public getHome(): Path { return this.home; }
-  public run(cmd: string, args: string[], options?: any): any {
-    return this.shellRun.run(cmd, args, options);
+  getDir(): Path {
+    return this.dir;
+  }
+
+  getFs(): I_Fs {
+    return this.fs;
+  }
+
+  getKeys(): string[] {
+    return Array.from(this.map.keys());
+  }
+
+  getValue(key: string): CliCtxArg {
+    return this.map.get(key);
+  }
+
+  getHome(): Path {
+    return this.home;
+  }
+
+  run(cmd: string, args: string[], options?: any, logLevel?: number): any {
+    return this.shellRun.run(cmd, args, options, logLevel);
   }
 
   isBash(): boolean {
@@ -554,16 +641,28 @@ export class CliCtx implements I_CmdLog {
     }
     return false;
   }
-  isDebug(): boolean { return this.map.has(DEBUG.cmd); }
-  isDone(): boolean { return this.done; }
-  public isInMap(key: string): boolean {  return this.map.has(key);  }
-  isWindows(): boolean { return IS_WINDOWS; }
+
+  isDebug(): boolean {
+    return this.map.has(DEBUG.cmd);
+  }
+
+  isDone(): boolean {
+    return this.done;
+  }
+
+  isInMap(key: string): boolean {
+    return this.map.has(key);
+  }
+
+  isWindows(): boolean {
+    return IS_WINDOWS;
+  }
 
 
   /**
-   * Checks if the context is set to debug 
+   * Checks if the context is set to debug
    * and if so prints the message, if you want to print regarless use print
-   * @param message 
+   * @param message
    */
   out(message: string) {
     if (this.map.has(DEBUG.cmd)) {
@@ -575,11 +674,15 @@ export class CliCtx implements I_CmdLog {
       this.log.log(message);
     }
   }
-  print(message: string) { this.out(message) }
 
-  proc(): I_Proc {
+  print(message: string) {
+    this.out(message)
+  }
+
+  getProc(): I_Proc {
     return this.procIn;
   }
+
   setDir(): void {
     let arg: CliCtxArg = this.map.get(DIR.cmd);
     var dir: string = process.cwd();
@@ -613,52 +716,62 @@ export class CliCtx implements I_CmdLog {
     }
   }
 
-  public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any): void {
-    if (this.map.has(DEBUG.cmd)) {
+  public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any, logLevel?: number): void {
+    var ltop: number = this.isDebug() ? LogLevel.DEBUG : LogLevel.INFO;
+    var ll = ltop >= logLevel ? ltop : logLevel;
+    if (this.isDebug()) {
       this.out('ran ' + cmdWithArgs);
     }
     if (options != undefined) {
       if (options.cwd != undefined) {
-        if (this.map.has(DEBUG.cmd)) {
+        if (ll <= LogLevel.TRACE) {
           this.out('\tin ' + options.cwd);
         }
       } else {
-        if (this.map.has(DEBUG.cmd)) {
-          this.out('\tin ' + ctx.getDir());
+        if (ll <= LogLevel.TRACE) {
+          this.out('\tin ' + this.getDir());
         }
       }
     } else {
-      if (this.map.has(DEBUG.cmd)) {
-        this.out('\tin ' + ctx.getDir());
+      if (ll <= LogLevel.TRACE) {
+        this.out('\tin ' + this.getDir());
       }
     }
-    if (this.map.has(DEBUG.cmd)) {
+    if (ll <= LogLevel.TRACE) {
       this.out('\tand the spawnSyncReturns had;');
     }
     if (spawnSyncReturns.error != undefined) {
-      if (this.map.has(DEBUG.cmd)) {
+      if (ll <= LogLevel.TRACE) {
         this.out('\tError: ' + spawnSyncReturns.error);
         this.out('\t\t' + spawnSyncReturns.error.message);
       }
     }
     if (spawnSyncReturns.stderr != undefined) {
-      if (this.map.has(DEBUG.cmd)) {
+      if (ll <= LogLevel.TRACE) {
         this.out('\tStderr: ' + spawnSyncReturns.stderr);
       }
     }
     if (spawnSyncReturns.stdout != undefined) {
-      if (this.map.has(DEBUG.cmd)) {
-        this.out('\tStdout: ' + spawnSyncReturns.stdout);
+      if (this.isDebug()) {
+        if (spawnSyncReturns.stdout.length >= 100) {
+          if (ll <= LogLevel.TRACE) {
+            this.out('\tStdout: ' + spawnSyncReturns.stdout);
+          } else {
+            this.out('\tStdout: ' + spawnSyncReturns.stdout.slice(0, 100) + ' ... \n');
+          }
+        } else {
+          this.out('\tStdout: ' + spawnSyncReturns.stdout);
+        }
       }
     }
   }
 }
 
 export class FsContext {
-  private ctx: CliCtx;
+  private ctx: I_CliCtx;
   private fs: I_Fs;
-  
-  constructor(cliCtx: CliCtx, mockFs?: I_Fs) {
+
+  constructor(cliCtx: I_CliCtx, mockFs?: I_Fs) {
     this.ctx = cliCtx;
     if (mockFs != undefined) {
       this.fs = mockFs;
@@ -668,32 +781,52 @@ export class FsContext {
   }
 
   /**
-   * This generally runs a ls command and looks for package.json in the output
+   * This determines if a path (folder or file) exists.
    * @param path
    */
   existsAbs(path: Path): boolean {
-    if (ctx.isDebug()) {
-      ctx.out("in existsAbs with path (toUnix) " + Paths.toUnix(path));
+    if (this.ctx.isDebug()) {
+      this.ctx.out("in existsAbs with path (toUnix) " + Paths.toUnix(path));
       // hmm circular structure ;
       //ctx.out("in existsAbs ctx " + JSON.stringify(ctx));
     }
-    if (ctx.isWindows()) {
+    if (this.ctx.isWindows()) {
       //existsSync s broken! for symblic links at least, this is clugy hack
-      if (ctx.isBash()) {
-        let ssr: any = ctx.run('ls', [Paths.toUnix(path)], ctx);
+      if (this.ctx.isBash()) {
+        /*
+        hmm didn't work on Windows
+        if (ctx.getFs().existsSync(Paths.toUnix(path))) {
+          if (ctx.isDebug()) {
+            ctx.out("The following path exists; " + path.toPathString());
+          }
+          return true;
+        }
+        if (ctx.isDebug()) {
+          ctx.out("The following path does NOT exist; " + path.toPathString());
+        }
+        return false;
+        */
+        let ssr: any = this.ctx.run('ls', [Paths.toUnix(path)], this.ctx, LogLevel.TRACE);
+        var t = true;
         if (ssr.error != undefined) {
-          //assume an error is a failure
-          return false;
+          t = false;
         } else if (ssr.output != undefined) {
           if (ssr.output.toString().includes('No such file or directory')) {
-            return false;
+            t = false;
           }
         }
-        return true;
+        if (this.ctx.isDebug()) {
+          if (t) {
+            this.ctx.out("The following path exists; " + path.toPathString());
+          } else {
+            this.ctx.out("The following path does NOT exist; " + path.toPathString());
+          }
+        }
+        return t;
       } else {
-        let ssr: any = ctx.run('dir', [Paths.toUnix(path)]);
+        let ssr: any = this.ctx.run('dir', [Paths.toUnix(path)]);
         if (ssr.error != undefined) {
-          ctx.out("ssr.error " + JSON.stringify(ssr.error));
+          this.ctx.out("ssr.error " + JSON.stringify(ssr.error));
           //assume an error is a failure
           return false;
         } else if (ssr.output != undefined) {
@@ -704,7 +837,7 @@ export class FsContext {
         return true;
       }
     } else {
-      let ssr: any = ctx.run('ls', [Paths.toUnix(path)]);
+      let ssr: any = this.ctx.run('ls', [Paths.toUnix(path)]);
       if (ssr.error != undefined) {
         //assume an error is a failure
         return false;
@@ -714,14 +847,19 @@ export class FsContext {
 
   }
 
+  /**
+   * This determines if a path (folder or file) exists.
+   * @param relativePathParts
+   * @param inDir
+   */
   exists(relativePathParts: Path, inDir: Path): boolean {
-    if (ctx.isDebug()) {
-      ctx.out("in exists with path (toUnix) " + Paths.toUnix(relativePathParts) + " in " + Paths.toUnix(inDir));
+    if (this.ctx.isDebug()) {
+      this.ctx.out("in exists with path (toUnix) " + Paths.toUnix(relativePathParts) + " in " + Paths.toUnix(inDir));
     }
-    if (ctx.isWindows()) {
+    if (this.ctx.isWindows()) {
       //existsSync s broken! for symblic links at least, this is clugy hack
-      if (ctx.isBash()) {
-        let ssr: SpawnSyncReturns<string> = ctx.run('ls', [Paths.toUnix(relativePathParts)],
+      if (this.ctx.isBash()) {
+        let ssr: SpawnSyncReturns<string> = this.ctx.run('ls', [Paths.toUnix(relativePathParts)],
           { cwd: Paths.toWindows(inDir) });
         if (ssr.error != undefined) {
           //assume an error is a failure
@@ -733,7 +871,7 @@ export class FsContext {
         }
         return true;
       } else {
-        let ssr: any = ctx.run('dir', [Paths.toUnix(relativePathParts)],
+        let ssr: any = this.ctx.run('dir', [Paths.toUnix(relativePathParts)],
           { cwd: Paths.toWindows(inDir) });
         if (ssr.error != undefined) {
           //assume an error is a failure
@@ -746,7 +884,7 @@ export class FsContext {
         return true;
       }
     } else {
-      let ssr: any = ctx.run('ls', [Paths.toUnix(relativePathParts)],
+      let ssr: any = this.ctx.run('ls', [Paths.toUnix(relativePathParts)],
         { cwd: Paths.toUnix(inDir) });
       if (ssr.error != undefined) {
         //assume an error is a failure
@@ -758,17 +896,17 @@ export class FsContext {
   }
 
   getFs(): I_Fs { return this.fs; }
-  
+
   mkdir(dir: string, inDir: Path) {
-    if (ctx.isWindows()) {
+    if (this.ctx.isWindows()) {
       //existsSync s broken!
-      if (ctx.isBash()) {
-        ctx.run('mkdir', [dir], { cwd: Paths.toWindows(inDir) });
+      if (this.ctx.isBash()) {
+        this.ctx.run('mkdir', [dir], { cwd: Paths.toWindows(inDir) });
       } else {
-        ctx.run('mkdir', [dir], { cwd: Paths.toWindows(inDir) });
+        this.ctx.run('mkdir', [dir], { cwd: Paths.toWindows(inDir) });
       }
     } else {
-      ctx.run('mkdir', [dir], { cwd: Paths.toUnix(inDir) });
+      this.ctx.run('mkdir', [dir], { cwd: Paths.toUnix(inDir) });
     }
   }
 
@@ -786,23 +924,23 @@ export class FsContext {
 
   read(path: Path, charset?: string): any {
     try {
-      if (ctx.isWindows()) {
+      if (this.ctx.isWindows()) {
         //don't use unix files for gitbash here
         let p: string = Paths.toWindows(path);
-        if (ctx.isDebug()) {
-          ctx.out('reading ' + p);
+        if (this.ctx.isDebug()) {
+          this.ctx.out('reading ' + p);
         }
         return fs.readFileSync(p);
       } else {
         let p: string = Paths.toUnix(path);
-        if (ctx.isDebug()) {
-          ctx.out('reading ' + p);
+        if (this.ctx.isDebug()) {
+          this.ctx.out('reading ' + p);
         }
         return fs.readFileSync(p);
       }
     } catch (e) {
-      ctx.print('Error reading file ' + path.toString())
-      ctx.print(e.message);
+      this.ctx.print('Error reading file ' + path.toString())
+      this.ctx.print(e.message);
       throw e;
     }
   }
@@ -812,19 +950,19 @@ export class FsContext {
   }
 
   rm(pathParts: Path, inDir: Path) {
-    if (ctx.isDebug()) {
-      ctx.out("in rm (toUnix) " + Paths.toUnix(pathParts) + " in " + Paths.toUnix(inDir));
+    if (this.ctx.isDebug()) {
+      this.ctx.out("in rm (toUnix) " + Paths.toUnix(pathParts) + " in " + Paths.toUnix(inDir));
     }
     if (this.exists(pathParts, inDir)) {
-      if (ctx.isWindows()) {
+      if (this.ctx.isWindows()) {
         //existsSync s broken!
-        if (ctx.isBash()) {
-          ctx.run('rm', ['-fr', Paths.toUnix(pathParts)], { cwd: Paths.toWindows(inDir) });
+        if (this.ctx.isBash()) {
+          this.ctx.run('rm', ['-fr', Paths.toUnix(pathParts)], { cwd: Paths.toWindows(inDir) });
         } else {
-          ctx.run('rmdir', ['/s', Paths.toWindows(pathParts)], { cwd: Paths.toWindows(inDir) });
+          this.ctx.run('rmdir', ['/s', Paths.toWindows(pathParts)], { cwd: Paths.toWindows(inDir) });
         }
       } else {
-        ctx.run('rm', ['-fr', Paths.toUnix(pathParts)], { cwd: Paths.toUnix(inDir) });
+        this.ctx.run('rm', ['-fr', Paths.toUnix(pathParts)], { cwd: Paths.toUnix(inDir) });
       }
     }
   }
@@ -833,21 +971,21 @@ export class FsContext {
    * create a new symbolic link
    */
   slink(slinkName: string, toDir: Path, inDir: Path) {
-    if (ctx.isWindows()) {
+    if (this.ctx.isWindows()) {
       var toDirP = Paths.toWindows(toDir);
-      if (ctx.isDebug()) {
-        ctx.print("Linking to " + toDirP);
+      if (this.ctx.isDebug()) {
+        this.ctx.print("Linking to " + toDirP);
       }
       var options = { cwd: Paths.toWindows(inDir), shell: WINDOWS_CMD_PATH, keepShell: true }
       //var options ={ cwd:  Paths.toUnix(inDir), shell: process.env.SHELL}
-      if (ctx.isDebug()) {
-        ctx.out("Using shell " + options.shell + " in Windows dir " + options.cwd);
+      if (this.ctx.isDebug()) {
+        this.ctx.out("Using shell " + options.shell + " in Windows dir " + options.cwd);
       }
       //ctx.run('which', ['mklink.cmd'], options);
-      ctx.run(process.env.MKLINK_CMD, [slinkName, toDirP], options);
+      this.ctx.run(process.env.MKLINK_CMD, [slinkName, toDirP], options);
       //ctx.run('mklink.cmd '+ slinkName + ' ' + toDirP, [], options);
     } else {
-      ctx.run('ln', ['-s', '-T', Paths.toUnix(toDir), slinkName], { cwd: Paths.toUnix(inDir) });
+      this.ctx.run('ln', ['-s', '-T', Paths.toUnix(toDir), slinkName], { cwd: Paths.toUnix(inDir) });
     }
   }
 }
@@ -858,7 +996,7 @@ export class DependencySLinkGroup {
   private unixIn: string;
   private unixTo: string;
 
-  constructor(info: I_DependencySLinkGroup, ctx: CliCtx) {
+  constructor(info: I_DependencySLinkGroup, ctx: I_CliCtx) {
     this.group = info.group;
     this.projects = DependencySLinkProject.to(this.group, info.projects, ctx);
     this.unixIn = 'node_modules/' + this.group;
@@ -870,7 +1008,7 @@ export class DependencySLinkGroup {
 }
 
 export class DependencySLinkProject {
-  static to(group: string, projects: I_DependencySLinkProject[], ctx: CliCtx): DependencySLinkProject[] {
+  static to(group: string, projects: I_DependencySLinkProject[], ctx: I_CliCtx): DependencySLinkProject[] {
     let r = new Array(projects.length);
     for (var i = 0; i < projects.length; i++) {
       r[i] = new DependencySLinkProject(group, projects[i], ctx);
@@ -881,7 +1019,7 @@ export class DependencySLinkProject {
   private modulePath: string;
   private unixTo: Path;
 
-  constructor(group: string, info: I_DependencySLinkProject, ctx: CliCtx) {
+  constructor(group: string, info: I_DependencySLinkProject, ctx: I_CliCtx) {
     this.project = info.project;
     this.modulePath = info.modulePath;
     this.unixTo = Paths.toParts('../../../' + info.project + '/src', true);
@@ -902,7 +1040,7 @@ export class DependencySrcSLink {
   private unixTo: string;
   private name: string;
 
-  constructor(slink: I_DependencySrcSLink, ctx: CliCtx) {
+  constructor(slink: I_DependencySrcSLink, ctx: I_CliCtx) {
     this.name = slink.project + '@slink';
     if (slink.destPath == undefined) {
       this.unixIn = 'src';
@@ -1134,12 +1272,12 @@ export class Paths {
 }
 
 export class SLinkRunner {
-  private ctx: CliCtx;
+  private ctx: I_CliCtx;
   private fsCtx: FsContext;
 
-  constructor(ctx: CliCtx) {
+  constructor(ctx: I_CliCtx, fs: I_Fs) {
     this.ctx = ctx;
-    this.fsCtx = new FsContext(ctx);
+    this.fsCtx = new FsContext(ctx, fs);
   }
 
   run() {
@@ -1160,7 +1298,7 @@ export class SLinkRunner {
       let slinkHomeCheck = currentPkgJson.substring(currentPkgJson.length - 20, currentPkgJson.length);
       if ('/slink/package.json' == currentPkgJson) {
         throw Error('The current working directory is coming from the slink installation,' +
-            'please set the current working directory using --dir <someDirectory/>.');
+          'please set the current working directory using --dir <someDirectory/>.');
       }
     }
 
@@ -1250,33 +1388,39 @@ export class SLinkRunner {
       for (const projectName of projectNames) {
         // Check if project exists in parent directory
         const projectPath = new Path(parentDirParts.concat(projectName), false, this.ctx.isWindows());
+        const projectNodeM = new Path(projectPath.getParts().concat("node_modules"));
+        if (this.fsCtx.existsAbs(projectPath)) {
+          // Remove existing node_modules if it exists
+          this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
+        }
 
         if (this.fsCtx.existsAbs(projectPath)) {
           if (this.ctx.isDebug()) {
             this.ctx.out(`Found project ${projectName} at ${Paths.toOs(projectPath)}`);
           }
+          let exists = this.fsCtx.existsAbs(projectPath);
 
-          // Check if node_modules exists in the project
-          const nodeModulesPath = new Path(projectPath.getParts().concat('node_modules'), false, this.ctx.isWindows());
-
-          if (!this.fsCtx.existsAbs(nodeModulesPath)) {
-            // Run npm install in the project directory
-            if (this.ctx.isDebug()) {
-              this.ctx.out(`node_modules not found in ${projectName}, running npm install`);
+          if (exists) {
+            // Check if node_modules exists in the project
+            const nodeModulesPath = new Path(projectPath.getParts().concat('node_modules'), false, this.ctx.isWindows());
+            let exists2 = this.fsCtx.existsAbs(nodeModulesPath);
+            if (!exists2) {
+              // Run npm install in the project directory
+              if (this.ctx.isDebug()) {
+                this.ctx.out(`node_modules not found in ${projectName}, running npm install`);
+              }
+              this.ctx.run('npm', ['install'], { cwd: Paths.toOs(projectPath) });
             }
-            this.ctx.run('npm', ['install'], { cwd: Paths.toOs(projectPath) });
-          }
 
-          if (!this.fsCtx.existsAbs(nodeModulesPath)) {
-            // Remove existing node_modules if it exists
-            this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
+            if (exists2) {
 
-            // Create symlink to the project's node_modules
-            if (this.ctx.isDebug()) {
-              this.ctx.out(`Creating symlink from node_modules to ${Paths.toOs(nodeModulesPath)}`);
+              // Create symlink to the project's node_modules
+              if (this.ctx.isDebug()) {
+                this.ctx.out(`Creating symlink from node_modules to ${Paths.toOs(nodeModulesPath)}`);
+              }
+              this.fsCtx.slink('node_modules', nodeModulesPath, this.ctx.getDir());
+              return; // Use the first valid project
             }
-            this.fsCtx.slink('node_modules', nodeModulesPath, this.ctx.getDir());
-            return; // Use the first valid project
           }
         } else {
           if (this.ctx.isDebug()) {
@@ -1287,8 +1431,8 @@ export class SLinkRunner {
           return;
         }
         currentDirParts = currentDirParts.slice(0, currentDirParts.length - 1)
-        if (ctx.isDebug()) {
-          ctx.out("In handleSharedNodeModulesViaProjectLinks with currentDirParts " + currentDirParts);
+        if (this.ctx.isDebug()) {
+          this.ctx.out("In handleSharedNodeModulesViaProjectLinks with currentDirParts " + currentDirParts);
         }
       }
     }
@@ -1349,11 +1493,21 @@ export class SLinkRunner {
 }
 
 // ###################################### Main Script Execution ####################################
-export let ctx = new CliCtx(FLAGS, process.argv);
+var testing: boolean = false;
+// set in Webstorm as an Environment Variable or through the CLI
+//
+// https://www.jetbrains.com/help/webstorm/managing-plugins.html#open-plugin-settings
+// https://www.jetbrains.com/help/webstorm/run-debug-configuration-node-js.html
+if (process.env['RUNNING_TESTS4TS'] != undefined) {
+  testing = true;
+}
+if (!testing) {
+  let ctx = new CliCtx(FLAGS, process.argv);
 
-console.log('in slink starting runner.run()');
-console.log(process.argv);
-// Create and run the SLinkRunner
-let runner = new SLinkRunner(ctx);
-runner.run();
+  //console.log('in slink starting runner.run()');
+  //console.log(process.argv);
+  // Create and run the SLinkRunner
+  let runner = new SLinkRunner(ctx, new FsStub());
+  runner.run();
+}
 
