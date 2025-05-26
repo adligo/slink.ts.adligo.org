@@ -181,6 +181,12 @@ export interface I_Proc {
    * @param name
    */
   envVar(name: string): string;
+
+  getPathSeperator(): string;
+  /**
+   * return true if it's windows otherwise false
+   */
+  isWindows(): boolean;
   /**
  * wrapps process.env.SHELL
  */
@@ -258,6 +264,17 @@ export class ProcStub implements I_Proc {
    */
   envVar(name: string): string {
     return process.env[name];
+  }
+  getPathSeperator() {
+    if (this.isWindows()) {
+      return '\\';
+    } else {
+      return '/';
+    }
+  }
+
+  isWindows(): boolean {
+    return process.platform === "win32"
   }
   /**
    * @see {@link I_Proc#shell}
@@ -343,16 +360,6 @@ export class ShellRunner {
     var ssr: any = this.sSync.spawnSync(cmd, args, options);
 
     return ssr;
-  }
-}
-
-
-const IS_WINDOWS = process.platform === "win32";
-export function getPathSeperator() {
-  if (IS_WINDOWS) {
-    return '\\';
-  } else {
-    return '/';
   }
 }
 
@@ -493,7 +500,11 @@ export class CliCtx implements I_CliCtx {
     }
     */
 
-
+    if (this.isWindows()) {
+      if (!this.isBash()) {
+        throw new Error("When running slink on Windows you must use GitBash as Adminsitratior!");
+      }
+    }
 
     this.shellRun = new ShellRunner(this.console, this.isDebug(), new SpawnSyncStub(), this.procIn, LogLevel.INFO);
 
@@ -516,7 +527,7 @@ export class CliCtx implements I_CliCtx {
     }
     this.home = Paths.toPath(args[1], false);
     let homeParts: string[] = this.home.getParts();
-    this.home = Paths.toPath(new Path(homeParts.slice(0, homeParts.length - 2), false, IS_WINDOWS).toPathString(), false);
+    this.home = Paths.toPath(new Path(homeParts.slice(0, homeParts.length - 2), false, this.isWindows()).toPathString(), false);
     for (var i = 2; i < args.length; i++) {
       let a = args[i];
       //out('processing cli arg ' + a);
@@ -656,7 +667,7 @@ export class CliCtx implements I_CliCtx {
   }
 
   isWindows(): boolean {
-    return IS_WINDOWS;
+    return this.procIn.isWindows();
   }
 
 
@@ -711,7 +722,7 @@ export class CliCtx implements I_CliCtx {
       this.out('after toOsPath CliCtx.dir is ' + this.dir.toString());
     }
     if (this.map.has(LOG.cmd)) {
-      let logFileName = new Path(this.dir.getParts().concat('slink.log'), false, IS_WINDOWS).toPathString();
+      let logFileName = new Path(this.dir.getParts().concat('slink.log'), false, this.isWindows()).toPathString();
       this.out('writing to logfile ' + logFileName);
       this.log.setFileName(logFileName);
     }
@@ -991,7 +1002,7 @@ export class FsContext implements I_FsContext {
       if (success) {
         //do nothing
       } else {
-        throw Error('Unable to create the following link, are you running slink as Administrator or with heighened privleges?' +
+        throw Error('Unable to create the following link, are you running slink as Administrator or with heightened privleges?' +
             new Path(toDir.getParts().concat(slinkName), false, true).toString() );
       }
     } else {
@@ -1133,7 +1144,7 @@ export class Path {
   public getParts(): string[] { return this.parts.slice(0, this.parts.length); }
   public getParent(): Path {
     if (this.parts.length >= 2) {
-      return new Path(this.parts.slice(0, this.parts.length - 1), this.windows, this.relative);
+      return new Path(this.parts.slice(0, this.parts.length - 1), this.relative, this.windows);
     } else {
       throw new Error("The path " + this.toPathString() + " has no parents! ");
     }
@@ -1210,18 +1221,17 @@ export class Paths {
     return this.find(this.toPath(path, false), relativePath);
   }
 
-  static toOs(parts: Path): string {
-    if (IS_WINDOWS) {
+  static toOs(parts: Path, isWindows: boolean): string {
+    if (isWindows) {
       return this.toWindows(parts);
     } else {
       return this.toUnix(parts);
     }
   }
 
-  static toOsPath(path: string): string {
-    return this.toOs(this.toPath(path, false));
+  static newPath(path: string, relative: boolean, windows: boolean): Path {
+    return new Path(Paths.toPath(path, relative).getParts(), relative, windows);
   }
-
 
   /**
    * @param a path, which could be
@@ -1407,7 +1417,7 @@ export class SLinkRunner {
 
         // Create symlink to the environment variable path
         const targetPath = Paths.toPath(envValue, false);
-        this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath)}`);
+        this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath, this.ctx.isWindows())}`);
 
         this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
         return true; // Use the first valid environment variable
@@ -1427,7 +1437,7 @@ export class SLinkRunner {
     // Start from the current directory and traverse up the tree
     let transRoot: Path = projectDir.getParent();
     let transParts: string[] = transRoot.getParts();
-    var counter = transParts.length - 1;
+    var counter = transParts.length;
     var parentProjectWithNodeModulesPath : Path;
 
     while (counter >= 0) { // Stop at root (length 1 for drive/root)
@@ -1436,7 +1446,7 @@ export class SLinkRunner {
       const parentDir = new Path(parentDirParts, false, this.ctx.isWindows());
 
       if (this.ctx.isDebug()) {
-        this.ctx.out(`Checking parent directory: ${Paths.toOs(parentDir)}`);
+        this.ctx.out(`Checking parent directory: ${Paths.toOs(parentDir, this.ctx.isWindows())}`);
       }
 
 
@@ -1446,7 +1456,7 @@ export class SLinkRunner {
         const projectPath = new Path(projectPathParts, false, this.ctx.isWindows());
 
         if (this.ctx.isDebug()) {
-          this.ctx.out(`Checking for project ${projectName} at ${Paths.toOs(projectPath)}`);
+          this.ctx.out(`Checking for project ${projectName} at ${Paths.toOs(projectPath, this.ctx.isWindows())}`);
         }
 
         // Check if the project directory exists
@@ -1463,9 +1473,9 @@ export class SLinkRunner {
           } else {
             // Attempt to run npm install if node_modules doesn't exist
             if (this.ctx.isDebug()) {
-              this.ctx.out(`node_modules not found in ${projectName}, attempting npm install in ${Paths.toOs(projectPath)}`);
+              this.ctx.out(`node_modules not found in ${projectName}, attempting npm install in ${Paths.toOs(projectPath, this.ctx.isWindows())}`);
             }
-            const installResult = this.ctx.run('npm', ['install'], { cwd: Paths.toOs(projectPath) });
+            const installResult = this.ctx.run('npm', ['install'], { cwd: Paths.toOs(projectPath, this.ctx.isWindows()) });
 
             // Re-check after install attempt
             nodeModulesExists = this.fsCtx.existsAbs(nodeModulesPath);
@@ -1479,11 +1489,14 @@ export class SLinkRunner {
           }
         } else {
           if (this.ctx.isDebug()) {
-            this.ctx.out(`Project ${projectName} not found at ${Paths.toOs(projectPath)}`);
+            this.ctx.out(`Project ${projectName} not found at ${Paths.toOs(projectPath, this.ctx.isWindows())}`);
           }
         }
       }
       if (parentProjectWithNodeModulesPath != undefined) {
+        break;
+      }
+      if (parentDir.isRoot()) {
         break;
       }
       // Move up one directory level for next iteration
@@ -1492,17 +1505,17 @@ export class SLinkRunner {
 
     if (parentProjectWithNodeModulesPath != undefined) {
       this.ctx.print("\n\n\nFound parent with node modules " + parentProjectWithNodeModulesPath.toPathString());
-      if (this.fsCtx.exists(new Path(['node_modules'], true), this.ctx.getDir())) {
+      if (this.fsCtx.exists(new Path(['node_modules'], true, this.ctx.isWindows()), this.ctx.getDir())) {
         // Remove existing node_modules in current directory if it exists
-        this.ctx.print(`Removing node_modules in ${Paths.toOs(this.ctx.getDir())}`);
+        this.ctx.print(`Removing node_modules in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
         this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
       } else {
-        this.ctx.print(`Node_modules not currently in ${Paths.toOs(this.ctx.getDir())}`);
+        this.ctx.print(`Node_modules not currently in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
       }
 
       // Create symlink to the project's node_modules
-      var sp = "Creating symlink from node_modules in;\n\t " + Paths.toOs(this.ctx.getDir());
-      sp += "\n\tto \n\t" + Paths.toOs(parentProjectWithNodeModulesPath);
+      var sp = "Creating symlink from node_modules in;\n\t " + Paths.toOs(this.ctx.getDir(), this.ctx.isWindows());
+      sp += "\n\tto \n\t" + Paths.toOs(parentProjectWithNodeModulesPath, this.ctx.isWindows());
       this.ctx.print(sp);
       this.fsCtx.slink('node_modules', parentProjectWithNodeModulesPath, this.ctx.getDir());
     } else {
