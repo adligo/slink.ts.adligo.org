@@ -22,7 +22,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.4.6.3";
+export const VERSION_NBR: string = "1.4.7";
 export const WINDOWS_CMD_PATH = 'C:\\Windows\\system32\\cmd';
 
 
@@ -1169,6 +1169,9 @@ export class Path {
       }
     }
   }
+  public child(path: string) {
+    return new Path(this.getParts().concat(path), this.relative, this.windows);
+  }
 
   private concat(start: string, sep: string): string {
     var r: string = start;
@@ -1406,25 +1409,31 @@ export class SLinkRunner {
     this.ctx.print("Processing sharedNodeModuleProjectSLinkEnvVar: " + JSON.stringify(envVars));
 
     for (const envVar of envVars) {
-      const envValue = process.env[envVar];
+      const envValue = this.ctx.getProc().envVar(envVar);
       if (envValue) {
         if (this.ctx.isDebug()) {
           this.ctx.out(`Found environment variable ${envVar} with value ${envValue}`);
         }
+        let envValPath = Paths.newPath(envValue, false,  this.ctx.isWindows());
+        if (this.fsCtx.existsAbs(envValPath)) {
+          let nm = new Path(['node_modules'], true, this.ctx.isWindows());
+          if (this.fsCtx.exists(nm, this.ctx.getDir())) {
+            // Remove existing node_modules if it exists
+            this.fsCtx.rm(nm, this.ctx.getDir());
+          }
 
-        // Remove existing node_modules if it exists
-        this.fsCtx.rm(new Path(['node_modules'], true), this.ctx.getDir());
+          // Create symlink to the environment variable path
+          let targetPath = envValPath.child('node_modules');
+          this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath, this.ctx.isWindows())}`);
 
-        // Create symlink to the environment variable path
-        const targetPath = Paths.toPath(envValue, false);
-        this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath, this.ctx.isWindows())}`);
-
-        this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
-        return true; // Use the first valid environment variable
+          this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
+          return true; // Use the first valid environment variable
+        }
       } else {
         this.ctx.print(`Environment variable ${envVar} NOT found or empty`);
       }
     }
+
     return false;
   }
 

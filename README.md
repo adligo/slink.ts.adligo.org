@@ -93,6 +93,10 @@ npm uninstall -g @ts.adligo.org/slink
 npm install -g .
 ```
 
+## Release Slink
+
+If you have a working copy of slink from a npm install you will not need to do this.  
+
 ## Note for Windows Users
 
 Creating a symbolic link is kind of a huge pain in Windows.  First try to see if you can do it without slink using this short tutorial;
