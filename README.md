@@ -8,6 +8,12 @@ To install slink run the following command;
 npm install -g @ts.adligo.org/slink
 ```
 
+## Uninstall the package;
+
+```
+npm uninstall -g @ts.adligo.org/slink
+```
+
 ## Run slink
 The following commands include the suggested usage from GitBash.
 
@@ -75,11 +81,7 @@ You can install this slink command line application locally with npm;
 cd slink.mts.adligo.org
 npm run build
 ```
-## Uninstall the package;
 
-```
-npm uninstall -g @ts.adligo.org/slink
-```
 
 ## Compile / Run the TypeScript Compile (creates a bin and dist folder)
 
@@ -96,6 +98,13 @@ npm install -g .
 ## Release Slink
 
 If you have a working copy of slink from a npm install you will not need to do this.  
+With out a working installation of slink you will need to run two npm installs one in 
+slink.ts.adligo.org and one in slink_tests.ts.adligo.org.  Then you can run npm run build for slink and npm run tests (i.e. npm run testsWindows) in slink_tests.
+Once that's done run the following from slink.ts.adligo.org ;
+
+```
+npm publish 
+```
 
 ## Note for Windows Users
 

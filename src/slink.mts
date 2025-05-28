@@ -22,12 +22,15 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.4.7";
-export const WINDOWS_CMD_PATH = 'C:\\Windows\\system32\\cmd';
-
+export const VERSION_NBR: string = "1.4.9";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
+  /**
+   * wrapps process.env[name]
+   * @param name
+   */
+  envVar(name: string): string;
   /**
    * This is the absolute path of the current directory
    * as a Unix path (although you might be running on Windows).
@@ -37,6 +40,10 @@ export interface I_CliCtx {
   getFs(): I_Fs;
 
   getKeys(): string[];
+  
+  getShell(): string;
+  
+  getShellOptionsFactory(): ShellOptionsFactory;
 
   getValue(key: string): CliCtxArg;
 
@@ -287,16 +294,22 @@ export class ProcStub implements I_Proc {
 // ################################### Interface Implementation Constants  #########################################
 export const outStatic = (message) => console.log(message);
 
-export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true, letter: "d" }
-export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: false, letter: "l" }
-export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output.", flag: true, letter: "h" }
-export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
 
+export const DEBUG: I_CliCtxFlag = { cmd: "debug", description: "Displays debugging information about htis program.", flag: true, letter: "d" }
 export const DIR: I_CliCtxFlag = {
   cmd: "dir", description: "A parameter passing the working directory to run the application in, \n" +
     "conventionally through --dir `pwd`.  Note the Backticks.", flag: false
 }
-export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, VERSION];
+export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: false, letter: "l" }
+export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output.", flag: true, letter: "h" }
+export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
+
+export const SHELL: I_CliCtxFlag = {
+  cmd: "shell", description: "Specifies the shell to use for subprocess execution (e.g., /bin/bash). \n" +
+    "Overrides the USHELL environment variable when present.", flag: false, letter: "s"
+}
+
+export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, SHELL, VERSION];
 
 export enum LogLevel {
   TRACE = 0,
@@ -307,60 +320,87 @@ export enum LogLevel {
 }
 // ################################## Classes ###########################################
 export class ShellRunner {
-  debug: boolean = false;
   console: I_SlinkConsole;
-  proc: I_Proc = new ProcStub();
   sSync?: I_SpawnSync = new SpawnSyncStub();
   logLevel: number = LogLevel.INFO;
 
-  constructor(console: I_SlinkConsole, debug?: boolean, mockSpawnSync?: I_SpawnSync, mockProcess?: I_Proc, logLevel?: number) {
-    if (debug != undefined) {
-      this.debug = debug;
-    }
+  constructor(console: I_SlinkConsole, mockSpawnSync?: I_SpawnSync, logLevel?: number) {
     this.console = console;
     if (mockSpawnSync != undefined) {
       this.sSync = mockSpawnSync;
-    }
-    if (mockProcess != undefined) {
-      this.proc = mockProcess;
     }
     if (logLevel != undefined) {
       this.logLevel = logLevel;
     }
   }
 
-  public run(cmd: string, args: string[], options?: any, logLevel?: number): any {
-    var cc = cmd;
-    if (args != undefined) {
-      for (var i = 0; i < args.length; i++) {
-        cc = cc + ' ' + args[i];
-      }
-    }
-    let ll = logLevel < this.logLevel ? logLevel: this.logLevel;
-    //Execute fork to GitBash from GitBash execution
-    if (options == undefined) {
-      options = new Object();
-
-      options.shell = this.proc.shell();
-      if (ll <= LogLevel.DEBUG) {
-        this.console.out('New options, running with shell is ' + options.shell);
-      }
-    } else {
-      if (options.keepShell == undefined || options.keepShell == false) {
-        options.shell = this.proc.shell();
-      }
-      if (ll <= LogLevel.DEBUG) {
-        this.console.out('Running with shell is ' + options.shell);
-      }
-    }
-    if (ll <= LogLevel.DEBUG) {
-      this.console.out('Running with ll ' + ll + " this.ll is " + this.logLevel + " fun ll is " + logLevel );
-    }
+  public run(cmd: string, args: string[], options?: any): any {
     //stubbed for unit testing
     var ssr: any = this.sSync.spawnSync(cmd, args, options);
-
     return ssr;
   }
+}
+
+
+export class ShellOptionsFactory {
+  
+  /**
+   * @param ctx
+   * @param cwd the current working directory
+   */
+  public getOptions(ctx: I_CliCtx, cwd: string, logLevel?: number): any {
+    var r = new Object();
+    r = {...r, cwd: cwd};
+    r = {...r, shell: this.getShell(ctx, logLevel)};
+    return r;
+  }
+
+  /**
+   * @param ctx
+   * @param cwd the current working directory
+   */
+  public getOptionsShell(ctx: I_CliCtx, logLevel?: number): any {
+    var r = new Object();
+    r = {...r, shell: this.getShell(ctx, logLevel)}
+    return r;
+  }
+  
+  /**
+   * Determines which shell to use for subprocess execution.
+   * Priority: 1) --shell command line parameter, 2) USHELL environment variable, 3) default shell
+   */
+  public getShell(ctx: I_CliCtx, logLevel?: number): string {
+    if (logLevel == undefined) {
+      logLevel = LogLevel.INFO;
+    }
+    // Check for --shell command line parameter first (highest priority)
+    if (ctx && ctx.isInMap(SHELL.cmd)) {
+      let shellArg = ctx.getValue(SHELL.cmd);
+      if (shellArg && shellArg.getArg()) {
+        if (logLevel <= LogLevel.DEBUG) {
+          ctx.out('Using shell from --shell parameter: ' + shellArg.getArg());
+        }
+        return shellArg.getArg();
+      }
+    }
+
+    // Check for USHELL environment variable (second priority)
+    let ushell = ctx.envVar('USHELL');
+    if (ushell) {
+      if (logLevel <= LogLevel.DEBUG) {
+        ctx.out('Using shell from USHELL environment variable: ' + ushell);
+      }
+      return ushell;
+    }
+
+    // Fall back to default shell (lowest priority)
+    let defaultShell = ctx.getShell();
+    if (logLevel <= LogLevel.DEBUG) {
+      ctx.out('Using default shell: ' + defaultShell);
+    }
+    return defaultShell;
+  }
+  
 }
 
 export class CliCtxFlag {
@@ -453,7 +493,8 @@ export class CliCtx implements I_CliCtx {
    */
   private home: Path;
   private map: Map<string, CliCtxArg> = new Map();
-
+  private sof: ShellOptionsFactory = new ShellOptionsFactory();
+  
   /**
    * 
    * @param flags 
@@ -506,7 +547,7 @@ export class CliCtx implements I_CliCtx {
       }
     }
 
-    this.shellRun = new ShellRunner(this.console, this.isDebug(), new SpawnSyncStub(), this.procIn, LogLevel.INFO);
+    this.shellRun = new ShellRunner(this.console, new SpawnSyncStub(), LogLevel.INFO);
 
     let allFlags: CliCtxFlag[] = new Array(flags.length);
     let map2Cmds: Map<string, CliCtxFlag> = new Map();
@@ -602,17 +643,8 @@ export class CliCtx implements I_CliCtx {
     }
   }
 
-  private addCliCtxArg(flag: CliCtxFlag, cmd: string, i: number, args: string[]) {
-    if (flag.isFlag()) {
-      this.map.set(cmd, new CliCtxArg(flag));
-    } else if (i + 1 < args.length) {
-      let arg = args[i + 1];
-      i++;
-      this.map.set(cmd, new CliCtxArg(flag, arg));
-    } else {
-      throw Error('The following command line argument expects an additional argument; ' + cmd);
-    }
-    return i;
+  envVar(key: string): string {
+    return this.procIn.envVar(key);
   }
 
   getDir(): Path {
@@ -627,6 +659,14 @@ export class CliCtx implements I_CliCtx {
     return Array.from(this.map.keys());
   }
 
+  getShell(): string {
+    return this.procIn.shell();
+  }
+
+  getShellOptionsFactory(): ShellOptionsFactory {
+    return this.sof;
+  }
+  
   getValue(key: string): CliCtxArg {
     return this.map.get(key);
   }
@@ -635,8 +675,15 @@ export class CliCtx implements I_CliCtx {
     return this.home;
   }
 
-  run(cmd: string, args: string[], options?: any, logLevel?: number): any {
-    let ssr =  this.shellRun.run(cmd, args, options, logLevel);
+  run(cmd: string, args: string[]): any {
+    let options = this.sof.getOptions(this, Paths.toOs(this.dir, this.isWindows()), LogLevel.INFO);
+    let ssr =  this.shellRun.run(cmd, args, options);
+    this.logCmd(cmd + args, ssr, options, LogLevel.INFO);
+    return ssr;
+  }
+  
+  runE(cmd: string, args: string[], options?: any, logLevel?: number): any {
+    let ssr =  this.shellRun.run(cmd, args, options);
     this.logCmd(cmd + args, ssr, options, logLevel);
     return ssr;
   }
@@ -677,18 +724,12 @@ export class CliCtx implements I_CliCtx {
    * @param message
    */
   out(message: string) {
-    if (this.map.has(DEBUG.cmd)) {
-      if (this.map.has(LOG.cmd)) {
-        this.log.log(message);
-      }
-      this.console.out(message);
-    } else if (this.map.has(LOG.cmd)) {
-      this.log.log(message);
-    }
+    this.log.log(message);
+    this.console.out(message);
   }
 
   print(message: string) {
-    this.console.out(message)
+    this.console.out(message);
   }
 
   getProc(): I_Proc {
@@ -728,7 +769,7 @@ export class CliCtx implements I_CliCtx {
     }
   }
 
-  public logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any, logLevel?: number): void {
+  logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any, logLevel?: number): void {
     var ltop: number = this.isDebug() ? LogLevel.DEBUG : LogLevel.INFO;
     var ll = ltop;
     if (logLevel != undefined) {
@@ -780,6 +821,19 @@ export class CliCtx implements I_CliCtx {
         }
       }
     }
+  }
+  
+  private addCliCtxArg(flag: CliCtxFlag, cmd: string, i: number, args: string[]) {
+    if (flag.isFlag()) {
+      this.map.set(cmd, new CliCtxArg(flag));
+    } else if (i + 1 < args.length) {
+      let arg = args[i + 1];
+      i++;
+      this.map.set(cmd, new CliCtxArg(flag, arg));
+    } else {
+      throw Error('The following command line argument expects an additional argument; ' + cmd);
+    }
+    return i;
   }
 }
 
@@ -858,6 +912,7 @@ export class FsContext implements I_FsContext {
       // hmm circular structure ;
       //ctx.out("in existsAbs ctx " + JSON.stringify(ctx));
     }
+    let sof =  this.ctx.getShellOptionsFactory();
     if (this.ctx.isWindows()) {
       //existsSync s broken! for symblic links at least, this is clugy hack
       if (this.ctx.isBash()) {
@@ -881,14 +936,17 @@ export class FsContext implements I_FsContext {
         //let cmd = 'echo `[[ -d "test_data" || -f "test_data" ]] && echo "YES" || echo "NO"`';
         let cmd = 'echo `[[ -d "' + Paths.toUnix(path) + '" || -f "' + Paths.toUnix(path) +
             '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
-        let ssr: any = this.ctx.run(cmd, []);
+        let options = sof.getOptionsShell(this.ctx,);
+        let ssr: any = this.ctx.run(cmd, [], options);
         return this.funSsrExists(ssr, this.ctx, path);
       } else {
-        let ssr: any = this.ctx.run('dir', [], { cwd: Paths.toWindows(path)}, LogLevel.TRACE);
+        let options = sof.getOptions(this.ctx, Paths.toOs(path, this.ctx.isWindows()));
+        let ssr: any = this.ctx.run('dir', [], options);
         return this.funSsrExists(ssr, this.ctx, path);
       }
     } else {
-      let ssr: any = this.ctx.run('ls', [Paths.toUnix(path)],undefined, LogLevel.TRACE);
+      let options = sof.getOptionsShell(this.ctx);
+      let ssr: any = this.ctx.run('ls', [Paths.toUnix(path)],options);
       return this.funSsrExists(ssr, this.ctx, path);
     }
 
@@ -915,12 +973,12 @@ export class FsContext implements I_FsContext {
     if (this.ctx.isWindows()) {
       //existsSync s broken!
       if (this.ctx.isBash()) {
-        this.ctx.run('mkdir', [dir], {cwd: Paths.toWindows(inDir)});
+        this.ctx.run('mkdir', [dir], this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toUnix(inDir)));
       } else {
-        this.ctx.run('mkdir', [dir], {cwd: Paths.toWindows(inDir)});
+        this.ctx.run('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toOs(inDir, this.ctx.isWindows())));
       }
     } else {
-      this.ctx.run('mkdir', [dir], {cwd: Paths.toUnix(inDir)});
+      this.ctx.run('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toUnix(inDir)));
     }
   }
 
@@ -985,20 +1043,39 @@ export class FsContext implements I_FsContext {
    * create a new symbolic link
    */
   slink(slinkName: string, toDir: Path, inDir: Path) {
+    
+    /*
+    var sp = "Creating symlink from node_modules in;\n\t " + Paths.toOs(this.ctx.getDir(), this.ctx.isWindows());
+          sp += "\n\tto \n\t" + Paths.toOs(parentProjectWithNodeModulesPath, this.ctx.isWindows());
+          this.ctx.print(sp);
+          */
+    
+    
+    let sof = this.ctx.getShellOptionsFactory();
     if (this.ctx.isWindows()) {
-      var toDirP = Paths.toWindows(toDir);
+      let toDirP = Paths.toWindows(toDir);
+      let inDirP = Paths.toWindows(inDir);
       if (this.ctx.isDebug()) {
-        this.ctx.out("Linking to " + toDirP);
+        this.ctx.out("Linking to " + toDir);
       }
-      var options = {cwd: Paths.toWindows(inDir), shell: WINDOWS_CMD_PATH, keepShell: true}
+      var options = sof.getOptions(this.ctx, inDirP);
       //var options ={ cwd:  Paths.toUnix(inDir), shell: process.env.SHELL}
       if (this.ctx.isDebug()) {
         this.ctx.out("Using shell " + options.shell + " in Windows dir " + options.cwd);
+        this.ctx.out("Creating link named " + slinkName + "  to \n\t " + toDirP);
+        this.ctx.out("All options are " + JSON.stringify(options));
+        let pwdResult = this.ctx.run('pwd', [], options, LogLevel.TRACE);
+        this.ctx.out("pwdResult is \n\t" + pwdResult.stdout);
       }
-      this.ctx.run('mklink', [slinkName, toDirP], options);
+      
+      let result = this.ctx.run('echo \'mklink /J ' + slinkName + ' ' + toDirP +'\' | cmd',[], options, LogLevel.TRACE);
+      if (this.ctx.isDebug()) {
+        this.ctx.out("mklink result.stdout is \n\t" + result.stdout);
+        this.ctx.out("mklink result.stderr is \n\t" + result.stderr);
+      }
       //note you must be adminsitrator or have heightened privlages to do this on Windows, so double check if
       // it got done
-      let success = this.existsAbs(new Path(inDir.getParts().concat(slinkName)));
+      let success = this.existsAbs(inDir.child(slinkName));
       if (success) {
         //do nothing
       } else {
@@ -1006,7 +1083,10 @@ export class FsContext implements I_FsContext {
             new Path(toDir.getParts().concat(slinkName), false, true).toString() );
       }
     } else {
-      this.ctx.run('ln', ['-s', '-T', Paths.toUnix(toDir), slinkName], {cwd: Paths.toUnix(inDir)});
+      let inDirP = Paths.toUnix(inDir);
+      let toDirP = Paths.toUnix(toDir);
+      let options = sof.getOptions(this.ctx, inDirP);
+      this.ctx.run('ln', ['-s', '-T', toDirP, slinkName], options);
     }
   }
 }
@@ -1308,7 +1388,6 @@ export class Paths {
     return this.toUnix(this.toPath(path, false));
   }
 
-
   static toWindows(parts: Path): string {
     let b = '';
     let pp: string[] = parts.getParts();
@@ -1327,8 +1406,28 @@ export class Paths {
     }
     return b;
   }
+
   static toWindowsPath(parts: string): string {
     return this.toWindows(this.toPath(parts, false));
+  }
+  
+  static toWindowsQuad(parts: Path): string {
+    let b = '';
+    let pp: string[] = parts.getParts();
+    for (var i = 0; i < pp.length; i++) {
+      if (i == 0) {
+        if (pp[0].length == 1) {
+          b = pp[0].toUpperCase() + ':\\\\';
+        } else {
+          b = pp[0].concat('\\\\');
+        }
+      } else if (i == pp.length - 1) {
+        b = b.concat(pp[i]);
+      } else {
+        b = b.concat(pp[i]).concat('\\\\');
+      }
+    }
+    return b;
   }
 }
 

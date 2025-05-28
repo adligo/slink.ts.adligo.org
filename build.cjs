@@ -30,12 +30,12 @@ if (isWin) {
 
 
 function out(cmd, spawnSyncReturns) {
-  console.log('ran: ' + cmd );
+  console.log('ran: ' + cmd);
   console.log('\tand the spawnSyncReturns had;');
   if (spawnSyncReturns.error != undefined) {
     console.log('\tError: ' + spawnSyncReturns.error);
     console.log('\t\t' + spawnSyncReturns.error.message);
-  }  
+  }
   if (spawnSyncReturns.stderr != undefined) {
     console.log('\tStderr: ' + spawnSyncReturns.stderr);
   }
@@ -46,7 +46,7 @@ function out(cmd, spawnSyncReturns) {
 
 function run(cmd, args) {
   var cc = cmd;
-  for (var i=0; i < args.length; i++) {
+  for (var i = 0; i < args.length; i++) {
     cc = cc + ' ' + args[i];
   }
   out(cc, spawnSync(cmd, args, { cwd: projectPath }));
@@ -54,37 +54,34 @@ function run(cmd, args) {
 
 function run(cmd, args, options) {
   var cc = cmd;
-  for (var i=0; i < args.length; i++) {
+  for (var i = 0; i < args.length; i++) {
     cc = cc + ' ' + args[i];
   }
   out(cc, spawnSync(cmd, args, options));
 }
 
+console.log(process.env);
 function getShell() {
-  const process = spawnSync('echo', ['$SHELL'], { shell: true });
-  if (process.error) {
-    // Handle error, possibly default to 'sh' or 'cmd.exe' depending on OS
-    return process.error.message.includes('Cannot find module') ? 'cmd.exe' : 'sh';
-  }
-  return process.stdout.toString().trim();
+  return '/usr/bin/bash';
 }
 
-const currentShell = getShell();
+var currentShell = getShell();
 console.log(`The shell being used is: ${currentShell}`);
 
 console.log('in build.cjs with ' + process.argv)
-for (var i=2; i < process.argv.length; i++) {
+for (var i = 2; i < process.argv.length; i++) {
   switch (process.argv[i]) {
     case '--install-local':
       console.log('processing --install-local ' + process.env.SHELL)
-	  options = new Object();
-	  options.cwd = projectPath
-	  options.shell = process.env.SHELL
-	  //run('echo',['$PATH'], options);
-	  run(npm,['uninstall','-g','@ts.adligo.org/slink'], options);
-      run('rm',['-fr','dist'], options);
-      run(npm,['run','tsc'], options);
-      run(npm,['install','-g','.'], options);
+      options = new Object();
+      options.cwd = projectPath
+      options.shell = process.env.SHELL
+      //run('echo',['$PATH'], options);
+      run(npm, ['uninstall', '-g', '@ts.adligo.org/slink'], options);
+      run('rm', ['-fr', 'dist'], options);
+      console.log('running tsc')
+      run(npm, ['run', 'tsc'], options);
+      run(npm, ['install', '-g', '.'], options);
       break;
     default: throw Error('Unknown flag / argument ' + process.argv[i]);
   }
