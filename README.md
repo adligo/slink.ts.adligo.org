@@ -1,4 +1,4 @@
-# slink.mts.adligo.org
+# slink.ts.adligo.org
 This is a simple Type Script Application that will create and store symbolic link data into your package.json file under the dependencySLinks or dependencySLinkGroups sections. This can help you improve the speed of changing upstream Javascript or Typescript in a multiple project dependency system.  
 
 ## Install slink
