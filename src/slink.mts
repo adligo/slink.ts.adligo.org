@@ -159,7 +159,7 @@ export interface I_Fs {
    * @param parentPath the absolute OS dependent path of the parent directory.
    * @returns the string that represents the relative path that a Symlink is pointing at.
    */
-  getSymlinkTargetRelative(relativePath: string, parentPath: string): string;
+  getSymlinkTargetRelative(relativePath: string, parentPath: string, pathSeperator: string): string;
 
   /**
    * Identifies if this path is a Symlink or not
@@ -1083,7 +1083,7 @@ export class FsContext implements I_FsContext {
   }
 
   getSymlinkTarget(dir: Path): Path {
-    return new Path(this.fs.getSymlinkTarget(Paths.toOs(dir, this.ctx.isWindows())));
+    return Paths.newPath(this.fs.getSymlinkTarget(Paths.toOs(dir, this.ctx.isWindows())), true, this.ctx.isWindows());
   }
   
   getSymlinkTargetRelative(relativePath: Path, parentPath: Path): Path {
@@ -1094,9 +1094,9 @@ export class FsContext implements I_FsContext {
     }
     var pathSeperator = '/';
     if (this.ctx.isWindows()) {
-      parentPath = '\\';
+      pathSeperator = '\\';
     }
-    let r = this.fs.getSymlinkTargetRelative(rPath, aPath, parentPath);
+    let r = this.fs.getSymlinkTargetRelative(rPath, aPath, pathSeperator);
     return Paths.newPath(r, true, this.ctx.isWindows());
   }
 
@@ -1602,15 +1602,17 @@ export class SLinkRunner {
    */
   removeNodeModules() {
     let projectDir : Path = this.ctx.getDir();
-    if (this.ctx.isWindows()) {
-      let nmDir = projectDir.child('node_modules');
-      if (this.fsCtx.isSymlink(nmDir)) {
-        this.fsCtx.rd('node_modules', projectDir);
+    let nmDir = projectDir.child('node_modules');
+    if (this.fsCtx.existsAbs(nmDir)) {
+      if (this.ctx.isWindows()) {
+        if (this.fsCtx.isSymlink(nmDir)) {
+          this.fsCtx.rd('node_modules', projectDir);
+        } else {
+          this.fsCtx.rm(new Path(['node_modules'], true, this.ctx.isWindows()), projectDir);
+        }
       } else {
-        this.fsCtx.rm('node_modules', projectDir);
+        this.fsCtx.rm(new Path(['node_modules'], true, this.ctx.isWindows()), projectDir);
       }
-    } else {
-      this.fsCtx.rm('node_modules', projectDir);
     }
   }
   
@@ -1700,7 +1702,7 @@ export class SLinkRunner {
           let nm = new Path(['node_modules'], true, this.ctx.isWindows());
           if (this.fsCtx.exists(nm, this.ctx.getDir())) {
             // Remove existing node_modules if it exists
-            removeNodeModules();
+            this.removeNodeModules();
           }
 
           // Create symlink to the environment variable path
@@ -1798,7 +1800,7 @@ export class SLinkRunner {
       if (this.fsCtx.exists(new Path(['node_modules'], true, this.ctx.isWindows()), this.ctx.getDir())) {
         // Remove existing node_modules in current directory if it exists
         this.ctx.print(`Removing node_modules in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
-        removeNodeModules();
+        this.removeNodeModules();
       } else {
         this.ctx.print(`Node_modules not currently in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
       }

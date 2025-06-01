@@ -40,6 +40,8 @@ This provides slink with a list of environment variables to scan for a node_modu
 ## dependencySrcSLinks @deprecated!
 
 Note this has been deprecated as it didn't work as well as ../.. in VsCode!  Don't use it!
+Instead use paths like the following in your imports;
+ ../../<project_name/>/src/<module_file_name/>
 
 These are the fastest and simplest links you can store in your package.json file.  By default they will link
 to another project checked out in the same folder as the current project.  Also by default slink will place a symbolic link named &lt;project_name&gt;@slink in your source folder.
@@ -60,7 +62,9 @@ Then import the code in your TypeScript file;
 ## dependencySLinkGroups @deprecated!
 
 Note this has been deprecated as it didn't work as well as ../.. in VsCode!  Don't use it!
-
+Instead use paths like the following in your imports;
+ ../../<project_name/>/src/<module_file_name/>
+ 
 These are links in your node_modlue folder to projects that are checkout in the same directory in the current folder.  When using these kind of links you should continue to import your node modules as usual with dependencies in package.json.  The settings here will delete the node_modules and create symbolic links to the projects checked out in the parent folder.
 
 In Example, under the root package.json object add the attribute;
