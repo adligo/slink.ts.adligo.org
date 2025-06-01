@@ -1852,12 +1852,12 @@ export class SLinkRunner {
             this.removeNodeModules();
           }
 
-          let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, envValPath.child('package.json'));
+          let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, envValPath.getParent().child('package.json'));
           if (comp.checkForMismatch()) {
             this.ctx.getProc().exit(11);
           }
           // Create symlink to the environment variable path
-          let targetPath = envValPath.child('node_modules');
+          let targetPath = envValPath;
           this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath, this.ctx.isWindows())}`);
 
           this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
