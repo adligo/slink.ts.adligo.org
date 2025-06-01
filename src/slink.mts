@@ -255,6 +255,11 @@ export interface I_Proc {
    */
   envVar(name: string): string;
 
+  /** 
+   * This exits the current program
+   */
+  exit(code: number);
+  
   getPathSeperator(): string;
   /**
    * return true if it's windows otherwise false
@@ -364,6 +369,14 @@ export class ProcStub implements I_Proc {
   envVar(name: string): string {
     return process.env[name];
   }
+  
+  /**
+   * @see {@link I_Proc#exit}
+   */
+  exit(code: number) {
+    process.exit(code);
+  }
+  
   getPathSeperator() {
     if (this.isWindows()) {
       return '\\';
@@ -1340,104 +1353,105 @@ export class PackageJsonComparator {
   private sharedDeps: Map<string,string>;
 
   constructor(projectJson: any, ctx: I_CliCtx, fsCtx: I_FsContext, sharedJsonPath: Path) {
-    this.projectJson = projectJson;
-    this.ctx = ctx;
-    if (this.ctx.isDebug()) {
-      this.ctx.out('in PackageJsonComparator constructor \n' +
-        JSON.stringify(projectJson.dependencies) + '\n' + JSON.stringify(projectJson.devDependencies)
-      );
-    }
-    this.fsCtx = fsCtx;
-    this.projectDeps = new Map();
-    this.sharedDeps = new Map();
-    this.sharedJsonPath = sharedJsonPath;
-    if (fsCtx.existsAbs(sharedJsonPath)) {
-      this.sharedJson = fsCtx.readJson(sharedJsonPath);
-    } else {
-      throw new Error(PackageJsonComparator.UNABLE_TO_READ_SHARED_PACKAGE_JSON_AT + sharedJsonPath.toPathString());
-    }
-    
-    let pDeps = projectJson.dependencies;
-    this.addProjectDeps(pDeps, this.projectDeps);
-    let pDevDeps = projectJson.devDependencies;
-    this.addProjectDeps(pDevDeps, this.projectDeps);
-    if (this.ctx.isDebug()) {
-      this.ctx.out('in PackageJsonComparator constructor this.projectDeps.size is '  + this.projectDeps.size);
-    }
-    if (this.projectDeps.size == 0) {
-      return;
+      this.projectJson = projectJson;
+      this.ctx = ctx;
+      if (this.ctx.isDebug()) {
+        this.ctx.out('in PackageJsonComparator constructor \n' +
+          JSON.stringify(projectJson.dependencies) + '\n' + JSON.stringify(projectJson.devDependencies)
+        );
+      }
+      this.fsCtx = fsCtx;
+      this.sharedJsonPath = sharedJsonPath;
+      if (fsCtx.existsAbs(sharedJsonPath)) {
+        this.sharedJson = fsCtx.readJson(sharedJsonPath);
+      } else {
+        throw new Error(PackageJsonComparator.UNABLE_TO_READ_SHARED_PACKAGE_JSON_AT + sharedJsonPath.toPathString());
+      }
+      
+      // Get all project dependencies
+      const pd = {
+        ... (this.projectJson.dependencies || {}),
+        ... (this.projectJson.devDependencies || {})
+      };
+      this.projectDeps = new Map(Object.entries(pd));
+      if (this.projectDeps.size == 0) {
+        this.sharedDeps = new Map();
+        return;
+      }
+
+      // Get all shared dependencies
+      const sd = {
+        ... (this.sharedJson.dependencies || {}),
+        ... (this.sharedJson.devDependencies || {})
+      };
+      this.sharedDeps = new Map(Object.entries(sd));
     }
 
-    let psDeps = this.sharedJson.dependencies;
-    this.addProjectDeps(psDeps, this.sharedDeps);
-    let psDevDeps = this.sharedJson.devDependencies;
-    this.addProjectDeps(psDevDeps, this.sharedDeps);
-  }
+    /**
+     * This checks for a mismatch versions or existence of dependencies in the sharedDeps with the projectDeps
+     * @returns false if there is no mismatch, true if a mismatch has occurred.
+     */
+    public checkForMismatch(): boolean {
+      if (this.ctx.isDebug()) {
+        this.ctx.out('in PackageJsonComparator checkForMismatch');
+      }
+      if (this.projectDeps.size == 0) {
+        return false;
+      }
+      var missing = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_IS_MISSING_THE_SUBSEQUENT_DEPENDENCIES;
+      missing += this.sharedJsonPath.toPathString() + '\n\t';
+      var mismatched = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_FILES_HAVE_MISMATCHED_VERSIONS;
+      mismatched += this.sharedJsonPath.toPathString() + '\n\t';
+      mismatched += new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows()).child('package.json').toPathString() + '\n\t';
 
-  /**
-   * This checks for a mismatch versions or existence of dependencies in the sharedDeps with the projectDeps
-   * @returns false if there is no mismatch, true if a mismatch has occurred.
-   */
-  public checkForMismatch(): boolean {
-    if (this.ctx.isDebug()) {
-      this.ctx.out('in PackageJsonComparator checkForMismatch');
-    }
-    if (this.projectDeps.size == 0) {
+      var hasMissing = false;
+      var hasMismatch = false;
+      for (const [key, value] of this.projectDeps) {
+        if (this.ctx.isDebug()) {
+          this.ctx.out('Checking project dependency ' + key + ','+ value);
+        }
+        if (this.sharedDeps.has(key)) {
+          let sVal = this.sharedDeps.get(key);
+          if (value != sVal) {
+            hasMismatch = true;
+            mismatched += key + ' ' + value + ' vs shared ' + sVal + '\n\t';
+          }
+        } else {
+          hasMissing = true;
+          missing += key + ' ' + value + '\n\t';
+        }
+      }
+      if (hasMismatch || hasMissing) {
+        if (hasMissing) {
+          this.ctx.out(missing);
+        }
+        if (hasMismatch) {
+          this.ctx.out(mismatched);
+        }
+        return true;
+      }
       return false;
     }
-    var missing = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_IS_MISSING_THE_SUBSEQUENT_DEPENDENCIES;
-    missing += this.sharedJsonPath.toPathString() + '\n\t';
-    var mismatched = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_FILES_HAVE_MISMATCHED_VERSIONS;
-    mismatched += this.sharedJsonPath.toPathString() + '\n\t';
-    mismatched += new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows()).child('package.json').toPathString() + '\n\t';
 
-    var hasMissing = false;
-    var hasMismatch = false;
-    for (const [key, value] of this.projectDeps) {
-      if (this.ctx.isDebug()) {
-        this.ctx.out('Checking project dependency ' + key + ','+ value);
-      }
-      if (this.sharedDeps.has(key)) {
-        let sVal = this.sharedDeps.get(key);
-        if (value != sVal) {
-          hasMismatch = true;
-          mismatched += key + ' ' + value + ' vs shared ' + sVal + '\n\t';
-        }
-      } else {
-        hasMissing = true;
-        missing += key + ' ' + value + '\n\t';
-      }
-    }
-    if (hasMismatch || hasMissing) {
-      if (hasMissing) {
-        this.ctx.out(missing);
-      }
-      if (hasMismatch) {
-        this.ctx.out(mismatched);
-      }
-      return true;
-    }
-    return false;
-  }
-
-  private addProjectDeps(pDeps, to: Map<string,string>) {
-    if (pDeps != undefined) {
-      if (this.ctx.isDebug()) {
-        this.ctx.out('Object.keys(pDeps).length is  ' + Object.keys(pDeps).length);
-      }
-      Object.keys(pDeps).forEach(key => {
-        let value = pDeps[key];
+    private addProjectDeps(pDeps, to: Map<string,string>) {
+      if (pDeps != undefined) {
         if (this.ctx.isDebug()) {
-          this.ctx.out('adding ' + key + ' ' + value);
+          this.ctx.out('Object.keys(pDeps).length is  ' + Object.keys(pDeps).length);
         }
-        to.set(key, value);
-      });
-    } else {
-      if (this.ctx.isDebug()) {
-        this.ctx.out('pDeps is undefined ');
+        Object.keys(pDeps).forEach(key => {
+          let value = pDeps[key];
+          if (this.ctx.isDebug()) {
+            this.ctx.out('adding ' + key + ' ' + value);
+          }
+          to.set(key, value);
+        });
+      } else {
+        if (this.ctx.isDebug()) {
+          this.ctx.out('pDeps is undefined ');
+        }
       }
     }
-  }
+
 }
 
 export class Path {
@@ -1773,12 +1787,17 @@ export class SLinkRunner {
     if (!this.fsCtx.existsAbs(currentDir)) {
       this.ctx.print('Aborting couldn\'t find a package.json file at;');
       this.ctx.print(currentPkgJsonPath.toPathString());
-      return;
+      process.exit(0);
     } else {
       this.ctx.print('Reading package.json file at;');
       this.ctx.print(currentPkgJsonPath.toPathString());
     }
 
+    if (!this.fsCtx.existsAbs(currentPkgJsonPath)) {
+      this.ctx.print('Aborting couldn\'t find a package.json file at;');
+      this.ctx.print(currentPkgJsonPath.toPathString());
+      process.exit(0);
+    }
     let json = this.fsCtx.readJson(currentPkgJsonPath);
 
     // Handle shared node modules via environment variable
@@ -1835,7 +1854,7 @@ export class SLinkRunner {
 
           let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, envValPath.child('package.json'));
           if (comp.checkForMismatch()) {
-            process.exit(11);
+            this.ctx.getProc().exit(11);
           }
           // Create symlink to the environment variable path
           let targetPath = envValPath.child('node_modules');
@@ -1939,7 +1958,7 @@ export class SLinkRunner {
 
       let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, parentProjectWithNodeModulesPath.getParent().child('package.json'));
       if (comp.checkForMismatch()) {
-        process.exit(11);
+        this.ctx.getProc().exit(11);
       }
       
       // Create symlink to the project's node_modules
