@@ -22,7 +22,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.2";
+export const VERSION_NBR: string = "1.5.3.b";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -1316,6 +1316,129 @@ export class DependencySrcSLink {
   }
 }
 
+/** 
+ * This class compares two package.json files to ensure that the packages and versions of those
+ * packages are identical, since we are symlinking the projects together the packages and versions
+ * required should match.
+ */
+export class PackageJsonComparator {
+  public static UNABLE_TO_READ_SHARED_PACKAGE_JSON_AT =  'Unable to read a shared dependency projects package.json file at;\n\t';
+  public static THE_FOLLOWING_PACKAGE_JSON_IS_MISSING_THE_SUBSEQUENT_DEPENDENCIES =  '\nThe following package.json is missing the subsequent dependencies;\n\t';
+  public static THE_FOLLOWING_PACKAGE_JSON_FILES_HAVE_MISMATCHED_VERSIONS =  'The following package.json files have mismatched versions for;\n\t';
+  private ctx: I_CliCtx;
+  private fsCtx: I_FsContext;
+  /** 
+   * This is the parsed json from package.json where slink was run
+   */
+  private projectJson: any;
+  private projectDeps: Map<string,string>;
+  /** 
+   * This is the parsed json from the package.json that is above the target of the node_modules symlink
+   */
+  private sharedJsonPath: Path;
+  private sharedJson: any;
+  private sharedDeps: Map<string,string>;
+
+  constructor(projectJson: any, ctx: I_CliCtx, fsCtx: I_FsContext, sharedJsonPath: Path) {
+    this.projectJson = projectJson;
+    this.ctx = ctx;
+    if (this.ctx.isDebug()) {
+      this.ctx.out('in PackageJsonComparator constructor \n' +
+        JSON.stringify(projectJson.dependencies) + '\n' + JSON.stringify(projectJson.devDependencies)
+      );
+    }
+    this.fsCtx = fsCtx;
+    this.projectDeps = new Map();
+    this.sharedDeps = new Map();
+    this.sharedJsonPath = sharedJsonPath;
+    if (fsCtx.existsAbs(sharedJsonPath)) {
+      this.sharedJson = fsCtx.readJson(sharedJsonPath);
+    } else {
+      throw new Error(PackageJsonComparator.UNABLE_TO_READ_SHARED_PACKAGE_JSON_AT + sharedJsonPath.toPathString());
+    }
+    
+    let pDeps = projectJson.dependencies;
+    this.addProjectDeps(pDeps, this.projectDeps);
+    let pDevDeps = projectJson.devDependencies;
+    this.addProjectDeps(pDevDeps, this.projectDeps);
+    if (this.ctx.isDebug()) {
+      this.ctx.out('in PackageJsonComparator constructor this.projectDeps.size is '  + this.projectDeps.size);
+    }
+    if (this.projectDeps.size == 0) {
+      return;
+    }
+
+    let psDeps = this.sharedJson.dependencies;
+    this.addProjectDeps(psDeps, this.sharedDeps);
+    let psDevDeps = this.sharedJson.devDependencies;
+    this.addProjectDeps(psDevDeps, this.sharedDeps);
+  }
+
+  /**
+   * This checks for a mismatch versions or existence of dependencies in the sharedDeps with the projectDeps
+   * @returns false if there is no mismatch, true if a mismatch has occurred.
+   */
+  public checkForMismatch(): boolean {
+    if (this.ctx.isDebug()) {
+      this.ctx.out('in PackageJsonComparator checkForMismatch');
+    }
+    if (this.projectDeps.size == 0) {
+      return false;
+    }
+    var missing = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_IS_MISSING_THE_SUBSEQUENT_DEPENDENCIES;
+    missing += this.sharedJsonPath.toPathString() + '\n\t';
+    var mismatched = PackageJsonComparator.THE_FOLLOWING_PACKAGE_JSON_FILES_HAVE_MISMATCHED_VERSIONS;
+    mismatched += this.sharedJsonPath.toPathString() + '\n\t';
+    mismatched += new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows()).child('package.json').toPathString() + '\n\t';
+
+    var hasMissing = false;
+    var hasMismatch = false;
+    for (const [key, value] of this.projectDeps) {
+      if (this.ctx.isDebug()) {
+        this.ctx.out('Checking project dependency ' + key + ','+ value);
+      }
+      if (this.sharedDeps.has(key)) {
+        let sVal = this.sharedDeps.get(key);
+        if (value != sVal) {
+          hasMismatch = true;
+          mismatched += key + ' ' + value + ' vs shared ' + sVal + '\n\t';
+        }
+      } else {
+        hasMissing = true;
+        missing += key + ' ' + value + '\n\t';
+      }
+    }
+    if (hasMismatch || hasMissing) {
+      if (hasMissing) {
+        this.ctx.out(missing);
+      }
+      if (hasMismatch) {
+        this.ctx.out(mismatched);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private addProjectDeps(pDeps, to: Map<string,string>) {
+    if (pDeps != undefined) {
+      if (this.ctx.isDebug()) {
+        this.ctx.out('Object.keys(pDeps).length is  ' + Object.keys(pDeps).length);
+      }
+      Object.keys(pDeps).forEach(key => {
+        let value = pDeps[key];
+        if (this.ctx.isDebug()) {
+          this.ctx.out('adding ' + key + ' ' + value);
+        }
+        to.set(key, value);
+      });
+    } else {
+      if (this.ctx.isDebug()) {
+        this.ctx.out('pDeps is undefined ');
+      }
+    }
+  }
+}
 
 export class Path {
   public static PARTS_MUST_HAVE_VALID_STRINGS = 'Parts must have valid strings! ';
@@ -1660,17 +1783,17 @@ export class SLinkRunner {
 
     // Handle shared node modules via environment variable
     if (json.sharedNodeModuleProjectSLinkEnvVar && json.sharedNodeModuleProjectSLinkEnvVar.length > 0) {
-      if (this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar)) {
+      if (this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar, json)) {
         if (this.ctx.isDebug()) {
           this.ctx.out("Processed  sharedNodeModuleProjectSLinkEnvVar");
         }
       } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
         // Handle shared node modules via project links
-        this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks);
+        this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
       }
     } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
       // Handle shared node modules via project links
-      this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks);
+      this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
     }
 
     // Handle existing dependency source links
@@ -1693,7 +1816,7 @@ export class SLinkRunner {
    * @param envVars 
    * @returns true if was processed, false if wasn't
    */
-  private handleSharedNodeModulesViaEnvVar(envVars: string[]): boolean {
+  private handleSharedNodeModulesViaEnvVar(envVars: string[], projectJson: any): boolean {
     this.ctx.print("Processing sharedNodeModuleProjectSLinkEnvVar: " + JSON.stringify(envVars));
 
     for (const envVar of envVars) {
@@ -1710,6 +1833,10 @@ export class SLinkRunner {
             this.removeNodeModules();
           }
 
+          let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, envValPath.child('package.json'));
+          if (comp.checkForMismatch()) {
+            process.exit(11);
+          }
           // Create symlink to the environment variable path
           let targetPath = envValPath.child('node_modules');
           this.ctx.print(`Creating symlink from node_modules to ${Paths.toOs(targetPath, this.ctx.isWindows())}`);
@@ -1725,7 +1852,7 @@ export class SLinkRunner {
     return false;
   }
 
-  private handleSharedNodeModulesViaProjectLinks(projectNames: string[]) {
+  private handleSharedNodeModulesViaProjectLinks(projectNames: string[], projectJson: any) {
     this.ctx.print("Processing sharedNodeModuleProjectSLinks: " + JSON.stringify(projectNames));
 
 
@@ -1810,6 +1937,11 @@ export class SLinkRunner {
         this.ctx.print(`Node_modules not currently in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
       }
 
+      let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, parentProjectWithNodeModulesPath.getParent().child('package.json'));
+      if (comp.checkForMismatch()) {
+        process.exit(11);
+      }
+      
       // Create symlink to the project's node_modules
       var sp = "Creating symlink from node_modules in;\n\t " + Paths.toOs(this.ctx.getDir(), this.ctx.isWindows());
       sp += "\n\tto \n\t" + Paths.toOs(parentProjectWithNodeModulesPath, this.ctx.isWindows());
