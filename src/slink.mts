@@ -255,8 +255,15 @@ export interface I_Proc {
    */
   envVar(name: string): string;
 
+  /**
+   * wrapps console.error and is used to notify calling scripts that this script has NOT completed successfully 
+   * by writing the test process.exit to the stderr.  So that calling scripts can look for 'process.exit', as I was unable to find the actual
+   * error code number from the spawnSyncReturns object.
+   * @param name
+   */
+  error(message: string);
   /** 
-   * This exits the current program
+   * This exits the current program, wrapps process.exit
    */
   exit(code: number);
   
@@ -363,6 +370,12 @@ export class ProcStub implements I_Proc {
     return process.env;
   }
 
+  /**
+   * @see {@link I_Proc#error}
+   */
+  error(message: string) {
+    console.error(message);
+  }
   /**
    * @see {@link I_Proc#envVar}
    */
@@ -1854,7 +1867,8 @@ export class SLinkRunner {
 
           let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, envValPath.getParent().child('package.json'));
           if (comp.checkForMismatch()) {
-            this.ctx.getProc().exit(11);
+            this.ctx.getProc().error('Unable to complete successfully, process.exit(' + 1870 + ')');
+            this.ctx.getProc().exit(1870);
           }
           // Create symlink to the environment variable path
           let targetPath = envValPath;
@@ -1958,7 +1972,8 @@ export class SLinkRunner {
 
       let comp = new PackageJsonComparator(projectJson, this.ctx, this.fsCtx, parentProjectWithNodeModulesPath.getParent().child('package.json'));
       if (comp.checkForMismatch()) {
-        this.ctx.getProc().exit(11);
+        this.ctx.getProc().error('Unable to complete successfully, process.exit(' + 1975 + ')');
+        this.ctx.getProc().exit(1975);
       }
       
       // Create symlink to the project's node_modules
