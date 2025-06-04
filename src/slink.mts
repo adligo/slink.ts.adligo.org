@@ -16,13 +16,14 @@
  */
 import {Buffer} from 'buffer';
 import * as fs from 'fs';
+import { PathLike } from 'fs';
 import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 
 // ###########################  Constants ################################
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.4";
+export const VERSION_NBR: string = "1.5.5.b";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -149,6 +150,11 @@ export interface I_Fs {
   ): void;
 
   /**
+   * Copies a file
+   */
+  copyFileSync(src: fs.PathOrFileDescriptor, dest: fs.PathOrFileDescriptor): void;
+  
+  /**
    * @param path the OS dependent absolute path
    * @returns the string that represents the path that a Symlink is pointing at.
    */
@@ -181,45 +187,7 @@ export interface I_Fs {
  * I_Fs provides the ability to stub out functions like readFileSync
  * for testing
  */
-export interface I_Fs {
-  /**
-   * Updates a file
-   */
-  appendFileSync(
-    path: fs.PathOrFileDescriptor,
-    data: string | Uint8Array,
-    options?: fs.WriteFileOptions,
-  ): void;
 
-  /**
-   * @param path the OS dependent absolute path
-   * @returns the string that represents the path that a Symlink is pointing at.
-   */
-  getSymlinkTarget(path: string): string;
-
-  /**
-   * @param path the OS dependent relative path
-   * @param parentPath the absolute OS dependent path of the parent directory.
-   * @returns the string that represents the relative path that a Symlink is pointing at.
-   */
-  getSymlinkTargetRelative(relativePath: string, parentPath: string, pathSeperator: string): string;
-
-  /**
-   * Identifies if this path is a Symlink or not
-   * @param path the OS dependent absolute path
-   * @returns True if the symlink exists, false otherwise.
-   */
-  isSymlink(path: string): boolean;
-  
-  
-  /**
-   * Reads a file
-   */
-  readFileSync(path: fs.PathOrFileDescriptor, options?: {
-    encoding?: null | undefined;
-    flag?: string | undefined;
-  } | null): string | undefined;
-}
 
 /**
 * I_SlinkConsole provides the ability to stub out console.log
@@ -304,6 +272,13 @@ export class FsStub implements I_Fs {
     fs.appendFileSync(path, data, options);
   }
 
+  /**
+   * @see {@link I_Fs#copyFileSync}
+   */
+  public copyFileSync(src: PathLike, dest: PathLike, mode?: number): void {
+    fs.copyFileSync(src, dest, mode);
+  }
+  
   /*
   doesn't work hmm fell back to bash commands for this
   existsSync(
@@ -421,6 +396,7 @@ export const DIR: I_CliCtxFlag = {
 export const LOG: I_CliCtxFlag = { cmd: "log", description: "Writes a slink.log file in the run directory.", flag: false, letter: "l" }
 export const HELP: I_CliCtxFlag = { cmd: "help", description: "Displays the Help Menu, prints this output.", flag: true, letter: "h" }
 export const REMOVE: I_CliCtxFlag = { cmd: "remove", description: "Removes the symlinks.", flag: true, letter: "r" }
+export const PUBLISH: I_CliCtxFlag = { cmd: "publish-local", description: "Publishes this compiled javascript to the current symlinked node_modules directory.", flag: true, letter: "p" }
 export const VERSION: I_CliCtxFlag = { cmd: "version", description: "Displays the version.", flag: true, letter: "v" }
 
 export const SHELL: I_CliCtxFlag = {
@@ -428,7 +404,7 @@ export const SHELL: I_CliCtxFlag = {
     "Overrides the USHELL environment variable when present.", flag: false, letter: "s"
 }
 
-export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, REMOVE, SHELL, VERSION];
+export const FLAGS: I_CliCtxFlag[] = [DEBUG, DIR, LOG, HELP, REMOVE, PUBLISH, SHELL, VERSION];
 
 export enum LogLevel {
   TRACE = 0,
@@ -792,13 +768,13 @@ export class CliCtx implements I_CliCtx {
   run(cmd: string, args: string[]): any {
     let options = this.sof.getOptions(this, Paths.toOs(this.dir, this.isWindows()), LogLevel.INFO);
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + args, ssr, options, LogLevel.INFO);
+    this.logCmd(cmd + ' ' + args, ssr, options, LogLevel.INFO);
     return ssr;
   }
   
   runE(cmd: string, args: string[], options?: any, logLevel?: number): any {
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + args, ssr, options, logLevel);
+    this.logCmd(cmd + ' ' + args, ssr, options, logLevel);
     return ssr;
   }
 
@@ -891,7 +867,7 @@ export class CliCtx implements I_CliCtx {
     }
 
     if (this.isDebug()) {
-      this.out('ran ' + cmdWithArgs);
+      this.out('ran ' + cmdWithArgs + ' in \n\t' + options.cwd);
     }
     if (options != undefined) {
       if (options.cwd != undefined) {
@@ -935,6 +911,9 @@ export class CliCtx implements I_CliCtx {
         }
       }
     }
+    if (spawnSyncReturns.status != 0) {
+      throw new Error('The command ' + cmdWithArgs + ' in dir \n\t' + options.cwd + ' \n\t Failed with exit code: ' + spawnSyncReturns.status);
+    }
   }
   
   private addCliCtxArg(flag: CliCtxFlag, cmd: string, i: number, args: string[]) {
@@ -963,7 +942,7 @@ export interface I_FsContext {
    * @param relativePathParts
    * @param inDir
    */
-  exists(relativePathParts: Path, inDir: Path): boolean;
+  exists(fileOrDir: string, inDir: Path): boolean;
 
   getFs(): I_Fs;
 
@@ -996,7 +975,7 @@ export interface I_FsContext {
 
   rd(dir: string, inDir: Path): void;
   
-  rm(pathParts: Path, inDir: Path): void;
+  rm(dir: string, inDir: Path): void;
 
   /**
    * create a new symbolic link
@@ -1043,7 +1022,7 @@ export class FsContext implements I_FsContext {
    */
   existsAbs(path: Path): boolean {
     if (this.ctx.isDebug()) {
-      this.ctx.out("in existsAbs with path (toUnix) " + Paths.toUnix(path));
+      this.ctx.out("in existsAbs with path (toUnix) " + path.toUnix());
       // hmm circular structure ;
       //ctx.out("in existsAbs ctx " + JSON.stringify(ctx));
     }
@@ -1069,7 +1048,7 @@ export class FsContext implements I_FsContext {
         var t = this.funSsrExists(ssr, this.ctx, path);
         */
         //let cmd = 'echo `[[ -d "test_data" || -f "test_data" ]] && echo "YES" || echo "NO"`';
-        let cmd = 'echo `[[ -d "' + Paths.toUnix(path) + '" || -f "' + Paths.toUnix(path) +
+        let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
             '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
         let options = sof.getOptionsShell(this.ctx,);
         let ssr: any = this.ctx.runE(cmd, [], options);
@@ -1081,7 +1060,7 @@ export class FsContext implements I_FsContext {
       }
     } else {
       let options = sof.getOptionsShell(this.ctx);
-      let cmd = 'echo `[[ -d "' + Paths.toUnix(path) + '" || -f "' + Paths.toUnix(path) +
+      let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
           '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
       if (this.ctx.isDebug()) {
         this.ctx.out('Executing cmd ' + cmd);
@@ -1097,11 +1076,11 @@ export class FsContext implements I_FsContext {
    * @param relativePathParts
    * @param inDir
    */
-  exists(relativePathParts: Path, inDir: Path): boolean {
+  exists(fileOrDir: string, inDir: Path): boolean {
     if (this.ctx.isDebug()) {
-      this.ctx.out("in exists with path (toUnix) " + Paths.toUnix(relativePathParts) + " in " + Paths.toUnix(inDir));
+      this.ctx.out("in exists with path (toUnix) " + fileOrDir + " in " + inDir.toUnix());
     }
-    return this.existsAbs(Path.newPath(inDir, relativePathParts));
+    return this.existsAbs(inDir.child(fileOrDir));
 
   }
 
@@ -1133,14 +1112,9 @@ export class FsContext implements I_FsContext {
 
   mkdir(dir: string, inDir: Path) {
     if (this.ctx.isWindows()) {
-      //existsSync s broken!
-      if (this.ctx.isBash()) {
-        this.ctx.runE('mkdir', [dir], this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toUnix(inDir)));
-      } else {
-        this.ctx.runE('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toOs(inDir, this.ctx.isWindows())));
-      }
+      this.ctx.runE('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toOs(inDir, this.ctx.isWindows())));
     } else {
-      this.ctx.runE('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, Paths.toUnix(inDir)));
+      this.ctx.runE('mkdir', [dir],  this.ctx.getShellOptionsFactory().getOptions(this.ctx, inDir.toUnix()));
     }
   }
 
@@ -1148,7 +1122,7 @@ export class FsContext implements I_FsContext {
     var dirNames: string[] = dirs.getParts();
     for (var i = 0; i < dirNames.length; i++) {
       let dir: string = dirNames[i];
-      if (!this.exists(new Path([dir], true, inDir.isWindows()), inDir)) {
+      if (!this.exists(dir, inDir)) {
         this.mkdir(dir, inDir);
       }
       inDir = new Path(inDir.getParts().concat(dir), false, inDir.isWindows());
@@ -1166,7 +1140,7 @@ export class FsContext implements I_FsContext {
         }
         return fs.readFileSync(p);
       } else {
-        let p: string = Paths.toUnix(path);
+        let p: string = path.toUnix();
         if (this.ctx.isDebug()) {
           this.ctx.out('reading ' + p);
         }
@@ -1200,20 +1174,20 @@ export class FsContext implements I_FsContext {
     }
   }
   
-  rm(pathParts: Path, inDir: Path) {
+  rm(dir: string, inDir: Path) {
     if (this.ctx.isDebug()) {
-      this.ctx.out("in rm (toUnix) " + Paths.toUnix(pathParts) + " in " + Paths.toUnix(inDir));
+      this.ctx.out("in rm (toUnix) " + dir + " in " + inDir.toUnix());
     }
-    if (this.exists(pathParts, inDir)) {
+    if (this.exists(dir, inDir)) {
       if (this.ctx.isWindows()) {
         //existsSync s broken!
-        if (this.ctx.isBash()) {
-          this.ctx.runE('rm', ['-fr', Paths.toUnix(pathParts)], {cwd: Paths.toWindows(inDir)});
-        } else {
-          this.ctx.runE('rmdir', ['/s', Paths.toWindows(pathParts)], {cwd: Paths.toWindows(inDir)});
-        }
+        this.ctx.runE('rm', ['-fr', dir], {cwd: Paths.toWindows(inDir)});
       } else {
-        this.ctx.runE('rm', ['-fr', Paths.toUnix(pathParts)], {cwd: Paths.toUnix(inDir)});
+        this.ctx.runE('rm', ['-fr', dir], {cwd: inDir.toUnix()});
+      }
+    } else {
+      if (this.ctx.isDebug()){
+        this.ctx.out(dir + " doesn't exist' in " + inDir.toUnix());
       }
     }
   }
@@ -1262,8 +1236,8 @@ export class FsContext implements I_FsContext {
             new Path(toDir.getParts().concat(slinkName), false, true).toString() );
       }
     } else {
-      let inDirP = Paths.toUnix(inDir);
-      let toDirP = Paths.toUnix(toDir);
+      let inDirP = inDir.toUnix();
+      let toDirP = toDir.toUnix();
       let options = sof.getOptions(this.ctx, inDirP);
       this.ctx.runE('ln', ['-s', '-T', toDirP, slinkName], options);
     }
@@ -1556,6 +1530,23 @@ export class Path {
       }
     }
   }
+  public toUnix(): string {
+    let b = '';
+    if (!this.relative) {
+      b = '/';
+    }
+    let pp: string[] = this.parts;
+    for (var i = 0; i < pp.length; i++) {
+      let p = pp[i];
+      if (i == pp.length - 1) {
+        b = b.concat(p);
+      } else {
+        b = b.concat(p).concat('/');
+      }
+    }
+    return b;
+  }
+  
   public child(path: string) {
     return new Path(this.getParts().concat(path), this.relative, this.windows);
   }
@@ -1615,7 +1606,7 @@ export class Paths {
     if (isWindows) {
       return this.toWindows(parts);
     } else {
-      return this.toUnix(parts);
+      return parts.toUnix();
     }
   }
 
@@ -1675,24 +1666,8 @@ export class Paths {
     }
   }
 
-  static toUnix(parts: Path): string {
-    let b = '';
-    if (!parts.isRelative()) {
-      b = '/';
-    }
-    let pp: string[] = parts.getParts();
-    for (var i = 0; i < pp.length; i++) {
-      let p = pp[i];
-      if (i == pp.length - 1) {
-        b = b.concat(p);
-      } else {
-        b = b.concat(p).concat('/');
-      }
-    }
-    return b;
-  }
   static toUnixPath(path: string): string {
-    return this.toUnix(this.toPath(path, false));
+    return this.toPath(path, false).toUnix();
   }
 
   static toWindows(parts: Path): string {
@@ -1752,98 +1727,6 @@ export class SLinkRunner {
   }
 
   /**
-   * This method removes the node_modules directory or symlink in the current 
-   * project if it is present
-   */
-  removeNodeModules() {
-    let projectDir : Path = this.ctx.getDir();
-    let nmDir = projectDir.child('node_modules');
-    if (this.fsCtx.existsAbs(nmDir)) {
-      if (this.ctx.isWindows()) {
-        if (this.fsCtx.isSymlink(nmDir)) {
-          this.fsCtx.rd('node_modules', projectDir);
-        } else {
-          this.fsCtx.rm(new Path(['node_modules'], true, this.ctx.isWindows()), projectDir);
-        }
-      } else {
-        this.fsCtx.rm(new Path(['node_modules'], true, this.ctx.isWindows()), projectDir);
-      }
-    }
-  }
-  
-  run() {
-    if (this.ctx.isDone()) {
-      return;
-    }
-
-    this.ctx.setDir();
-    if (this.ctx.isDebug()) {
-      this.ctx.out("In SLinkRunner after ctx.setDir");
-    }
-
-    if (this.ctx.isInMap(REMOVE.cmd)) {
-      this.removeNodeModules();
-      return;
-    }
-    let currentDir: Path = new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows());
-    let currentPkgJsonPath: Path = new Path(this.ctx.getDir().getParts().concat('package.json'), false, this.ctx.isWindows());
-    let currentPkgJson: string = currentPkgJsonPath.toPathString();
-
-    if (currentPkgJson.length >= 20) {
-      let slinkHomeCheck = currentPkgJson.substring(currentPkgJson.length - 20, currentPkgJson.length);
-      if ('/slink/package.json' == currentPkgJson) {
-        throw Error('The current working directory is coming from the slink installation,' +
-          'please set the current working directory using --dir <someDirectory/>.');
-      }
-    }
-
-    if (!this.fsCtx.existsAbs(currentDir)) {
-      this.ctx.print('Aborting couldn\'t find a package.json file at;');
-      this.ctx.print(currentPkgJsonPath.toPathString());
-      process.exit(0);
-    } else {
-      this.ctx.print('Reading package.json file at;');
-      this.ctx.print(currentPkgJsonPath.toPathString());
-    }
-
-    if (!this.fsCtx.existsAbs(currentPkgJsonPath)) {
-      this.ctx.print('Aborting couldn\'t find a package.json file at;');
-      this.ctx.print(currentPkgJsonPath.toPathString());
-      process.exit(0);
-    }
-    let json = this.fsCtx.readJson(currentPkgJsonPath);
-
-    // Handle shared node modules via environment variable
-    if (json.sharedNodeModuleProjectSLinkEnvVar && json.sharedNodeModuleProjectSLinkEnvVar.length > 0) {
-      if (this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar, json)) {
-        if (this.ctx.isDebug()) {
-          this.ctx.out("Processed  sharedNodeModuleProjectSLinkEnvVar");
-        }
-      } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
-        // Handle shared node modules via project links
-        this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
-      }
-    } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
-      // Handle shared node modules via project links
-      this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
-    }
-
-    // Handle existing dependency source links
-    this.handleDependencySrcSLinks(json.dependencySrcSLinks);
-
-    // Handle existing dependency link groups
-    this.handleDependencySLinkGroups(json.dependencySLinkGroups);
-  }
-
-  runCheck() {
-    if (this.ctx.isWindows()) {
-      if (!this.ctx.isBash()) {
-        throw new Error(CliCtx.WHEN_RUNNING_SLINK_ON_WINDOWS_YOU_MUST_USE_GITBASH_AS_ADMINISTRATOR);
-      }
-    }
-    this.run();
-  }
-  /**
    * 
    * @param envVars 
    * @returns true if was processed, false if wasn't
@@ -1859,8 +1742,7 @@ export class SLinkRunner {
         }
         let envValPath = Paths.newPath(envValue, false,  this.ctx.isWindows());
         if (this.fsCtx.existsAbs(envValPath)) {
-          let nm = new Path(['node_modules'], true, this.ctx.isWindows());
-          if (this.fsCtx.exists(nm, this.ctx.getDir())) {
+          if (this.fsCtx.exists('node_modules', this.ctx.getDir())) {
             // Remove existing node_modules if it exists
             this.removeNodeModules();
           }
@@ -1962,7 +1844,7 @@ export class SLinkRunner {
 
     if (parentProjectWithNodeModulesPath != undefined) {
       this.ctx.print("\n\n\nFound parent with node modules " + parentProjectWithNodeModulesPath.toPathString());
-      if (this.fsCtx.exists(new Path(['node_modules'], true, this.ctx.isWindows()), this.ctx.getDir())) {
+      if (this.fsCtx.exists('node_modules', this.ctx.getDir())) {
         // Remove existing node_modules in current directory if it exists
         this.ctx.print(`Removing node_modules in ${Paths.toOs(this.ctx.getDir(), this.ctx.isWindows())}`);
         this.removeNodeModules();
@@ -2001,7 +1883,7 @@ export class SLinkRunner {
       let slinkIn: Path = Paths.find(this.ctx.getDir(), unixIn);
       let slinkTo: Path = Paths.find(slinkIn, unixTo);
 
-      this.fsCtx.rm(new Path([dl.getName()], true), slinkIn);
+      this.fsCtx.rm(dl.getName(), slinkIn);
       if (this.ctx.isDebug()) {
         this.ctx.out("\n\nCreating slink for dependency source");
       }
@@ -2019,9 +1901,9 @@ export class SLinkRunner {
 
     for (let i = 0; i < linkGroups.length; i++) {
       let g = new DependencySLinkGroup(linkGroups[i], this.ctx);
-      let unixIn: Path = Paths.toPath(g.getUnixIn(), true);
-      this.fsCtx.rm(unixIn, this.ctx.getDir());
-      let gPath: Path = this.fsCtx.mkdirTree(unixIn, this.ctx.getDir());
+      let groupName = g.getGroup();
+      this.fsCtx.rm(groupName, this.ctx.getDir().child('node_modules'));
+      let gPath: Path = this.fsCtx.mkdirTree(Paths.newPath(g.getUnixIn(), true, this.ctx.isWindows()), this.ctx.getDir());
 
       g.getProjects().forEach((p) => {
         if (p.getModluePath() == undefined) {
@@ -2036,6 +1918,174 @@ export class SLinkRunner {
         }
       });
     }
+  }
+  
+
+  private publishLocal() {
+    let nmPath = this.ctx.getDir().child('node_modules');
+    if (!this.fsCtx.isSymlink(nmPath)) {
+      this.ctx.out('The node_modules directory is not a symlink, please run slink with out arguments to replace your current node_modules directory.');
+      this.ctx.getProc().exit(1930);
+    }
+    let target = this.fsCtx.getSymlinkTarget(nmPath);
+    let pkgPath = this.ctx.getDir().child('package.json');
+    let pkg = this.fsCtx.readJson(pkgPath);
+    let name = pkg.name;
+    let packageDirParts = name.split('/');
+    let nextPath = new Path(target.getParts(), false, this.ctx.isWindows());
+    for (var i =0; i < packageDirParts.length; i++) {
+      let nextPathParent = nextPath;
+      nextPath = nextPath.child(packageDirParts[i]);
+      var created = false;
+      if ( !this.fsCtx.existsAbs(nextPath)) {
+        if (this.ctx.isDebug()) {
+          this.ctx.out('Creating ' + packageDirParts[i] + ' in ' + nextPathParent.toPathString());
+        }
+        this.fsCtx.mkdir(packageDirParts[i], nextPathParent);
+        created = true;
+      }
+      if (i == packageDirParts.length - 1) {
+        if (!created) {
+          if (this.fsCtx.existsAbs(nextPath)) {
+            if (this.ctx.isDebug()) {
+              this.ctx.out('Removing and recreating ' + packageDirParts[i] + ' in ' + nextPathParent.toPathString());
+            }
+            this.fsCtx.rm(packageDirParts[i], nextPathParent);
+            this.fsCtx.mkdir(packageDirParts[i], nextPathParent);
+          }
+        }
+      }
+    }
+    
+    
+    let destPkgPath = nextPath.child('package.json');
+    if (this.ctx.isDebug()) {
+      this.ctx.out('Copying package.json from \n\t' + pkgPath.toPathString() + '\n to \n\t' + destPkgPath.toPathString());
+    }
+    this.fsCtx.getFs().copyFileSync(Paths.toOs(pkgPath, this.ctx.isWindows()), Paths.toOs(destPkgPath, this.ctx.isWindows()));
+    let distDir = nextPath.child('dist');
+    this.fsCtx.mkdir('dist', nextPath);
+    if (pkg.bin) {
+      for (let key in pkg.bin) {
+        let srcFile = pkg.bin[key];
+        if (srcFile.length >= 3) {
+          let srcFileParts = srcFile.substring(2, srcFile.length).split('/');
+          var srcPath = this.ctx.getDir();
+          for (i = 0; i < srcFileParts.length; i++) {
+            srcPath = srcPath.child(srcFileParts[i]);
+          }
+          let destFile = distDir.child(srcFileParts[srcFileParts.length - 1]);
+          if (this.fsCtx.existsAbs(srcPath)) {
+            if (this.ctx.isDebug()) {
+              this.ctx.out('Copying \b\t' + srcPath.toPathString() + '\n to \n\t' + destFile.toPathString());
+            }
+            this.fsCtx.getFs().copyFileSync(Paths.toOs(srcPath, this.ctx.isWindows()), Paths.toOs(destFile, this.ctx.isWindows()));
+          } else {
+            this.ctx.out(`Warning: bin file ${srcFile} not found`);
+          }
+        }
+      }
+    }
+  }
+  
+
+  /**
+   * This method removes the node_modules directory or symlink in the current 
+   * project if it is present
+   */
+  removeNodeModules() {
+    let projectDir : Path = this.ctx.getDir();
+    let nmDir = projectDir.child('node_modules');
+    if (this.fsCtx.existsAbs(nmDir)) {
+      if (this.ctx.isWindows()) {
+        if (this.fsCtx.isSymlink(nmDir)) {
+          this.fsCtx.rd('node_modules', projectDir);
+        } else {
+          this.fsCtx.rm('node_modules', projectDir);
+        }
+      } else {
+        this.fsCtx.rm('node_modules', projectDir);
+      }
+    }
+  }
+  
+
+  run() {
+    if (this.ctx.isDone()) {
+      return;
+    }
+
+    this.ctx.setDir();
+    if (this.ctx.isDebug()) {
+      this.ctx.out("In SLinkRunner after ctx.setDir");
+    }
+
+    if (this.ctx.isInMap(REMOVE.cmd)) {
+      this.removeNodeModules();
+      return;
+    }
+    
+    if (this.ctx.isInMap(PUBLISH.cmd)) {
+      this.publishLocal();
+      return;
+    }
+    let currentDir: Path = new Path(this.ctx.getDir().getParts(), false, this.ctx.isWindows());
+    let currentPkgJsonPath: Path = new Path(this.ctx.getDir().getParts().concat('package.json'), false, this.ctx.isWindows());
+    let currentPkgJson: string = currentPkgJsonPath.toPathString();
+
+    if (currentPkgJson.length >= 20) {
+      let slinkHomeCheck = currentPkgJson.substring(currentPkgJson.length - 20, currentPkgJson.length);
+      if ('/slink/package.json' == currentPkgJson) {
+        throw Error('The current working directory is coming from the slink installation,' +
+          'please set the current working directory using --dir <someDirectory/>.');
+      }
+    }
+
+    if (!this.fsCtx.existsAbs(currentDir)) {
+      this.ctx.print('Aborting couldn\'t find a package.json file at;');
+      this.ctx.print(currentPkgJsonPath.toPathString());
+      process.exit(0);
+    } else {
+      this.ctx.print('Reading package.json file at;');
+      this.ctx.print(currentPkgJsonPath.toPathString());
+    }
+
+    if (!this.fsCtx.existsAbs(currentPkgJsonPath)) {
+      this.ctx.print('Aborting couldn\'t find a package.json file at;');
+      this.ctx.print(currentPkgJsonPath.toPathString());
+      process.exit(0);
+    }
+    let json = this.fsCtx.readJson(currentPkgJsonPath);
+
+    // Handle shared node modules via environment variable
+    if (json.sharedNodeModuleProjectSLinkEnvVar && json.sharedNodeModuleProjectSLinkEnvVar.length > 0) {
+      if (this.handleSharedNodeModulesViaEnvVar(json.sharedNodeModuleProjectSLinkEnvVar, json)) {
+        if (this.ctx.isDebug()) {
+          this.ctx.out("Processed  sharedNodeModuleProjectSLinkEnvVar");
+        }
+      } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
+        // Handle shared node modules via project links
+        this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
+      }
+    } else if (json.sharedNodeModuleProjectSLinks && json.sharedNodeModuleProjectSLinks.length > 0) {
+      // Handle shared node modules via project links
+      this.handleSharedNodeModulesViaProjectLinks(json.sharedNodeModuleProjectSLinks, json);
+    }
+
+    // Handle existing dependency source links
+    this.handleDependencySrcSLinks(json.dependencySrcSLinks);
+
+    // Handle existing dependency link groups
+    this.handleDependencySLinkGroups(json.dependencySLinkGroups);
+  }
+
+  runCheck() {
+    if (this.ctx.isWindows()) {
+      if (!this.ctx.isBash()) {
+        throw new Error(CliCtx.WHEN_RUNNING_SLINK_ON_WINDOWS_YOU_MUST_USE_GITBASH_AS_ADMINISTRATOR);
+      }
+    }
+    this.run();
   }
 }
 
