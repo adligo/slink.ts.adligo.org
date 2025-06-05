@@ -24,7 +24,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.6.c";
+export const VERSION_NBR: string = "1.5.6.d";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -174,8 +174,12 @@ export interface I_Fs {
    * @returns True if the symlink exists, false otherwise.
    */
   isSymlink(path: string): boolean;
-  
-  
+
+  readdirSync(
+      path: PathLike,
+      options?: {encoding: BufferEncoding | null, withFileTypes?: false | undefined, recursive?: boolean | undefined} | BufferEncoding | null,
+  ): string[];
+
   /**
    * Reads a file
    */
@@ -365,6 +369,13 @@ export class FsStub implements I_Fs {
   isSymlink(path: string): boolean {
     let stats = fs.lstatSync(path);
     return stats.isSymbolicLink();
+  }
+
+  readdirSync(
+      path: PathLike,
+      options?: {encoding: BufferEncoding | null, withFileTypes?: false | undefined, recursive?: boolean | undefined} | BufferEncoding | null,
+  ): string[] {
+    return fs.readdirSync(path, options);
   }
 
   readFileSync(path: PathOrFileDescriptor, options?: {
@@ -1962,6 +1973,14 @@ export class SLinkRunner {
           }
         }
       }
+    }
+    let srcSrcDir = this.ctx.getDir().child('src');
+    let srcDestDir = nextPath.child('src');
+    this.fsCtx.mkdir('src', nextPath);
+    let srcFiles = this.fsCtx.getFs().readdirSync(Paths.toOs(srcSrcDir, this.ctx.isWindows()));
+    for (let srcFileName of srcFiles) {
+      this.fsCtx.getFs().copyFileSync(Paths.toOs(srcSrcDir.child(srcFileName), this.ctx.isWindows()),
+          Paths.toOs(srcDestDir.child(srcFileName), this.ctx.isWindows()));
     }
   }
   
