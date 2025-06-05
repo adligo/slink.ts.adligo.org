@@ -16,14 +16,15 @@
  */
 import {Buffer} from 'buffer';
 import * as fs from 'fs';
-import { PathLike } from 'fs';
+import { PathLike, PathOrFileDescriptor, WriteFileOptions } from 'fs';
+import { FileReadOptions } from "node:fs/promises";
 import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 
 // ###########################  Constants ################################
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.5";
+export const VERSION_NBR: string = "1.5.6.c";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -144,15 +145,15 @@ export interface I_Fs {
    * Updates a file
    */
   appendFileSync(
-    path: fs.PathOrFileDescriptor,
+    path: PathOrFileDescriptor,
     data: string | Uint8Array,
-    options?: fs.WriteFileOptions,
+    options?: WriteFileOptions,
   ): void;
 
   /**
    * Copies a file
    */
-  copyFileSync(src: fs.PathOrFileDescriptor, dest: fs.PathOrFileDescriptor): void;
+  copyFileSync(src: PathOrFileDescriptor, dest: PathOrFileDescriptor): void;
   
   /**
    * @param path the OS dependent absolute path
@@ -178,16 +179,68 @@ export interface I_Fs {
   /**
    * Reads a file
    */
-  readFileSync(path: fs.PathOrFileDescriptor, options?: {
+  readFileSync(path: PathOrFileDescriptor, options?: {
     encoding?: null | undefined;
     flag?: string | undefined;
   } | null): string | undefined;
 }
+
 /**
- * I_Fs provides the ability to stub out functions like readFileSync
+ * I_FsContext provides the ability to stub out functions like mkdir
  * for testing
  */
+export interface I_FsContext {
+  /**
+   * This determines if a path (folder or file) exists.
+   * @param path
+   */
+  existsAbs(path: Path): boolean;
 
+  /**
+   * This determines if a path (folder or file) exists.
+   * @param relativePathParts
+   * @param inDir
+   */
+  exists(fileOrDir: string, inDir: Path): boolean;
+
+  getFs(): I_Fs;
+
+  /**
+   * @param dir the absolute path of the Symlink
+   * @returns The string of the Symlink target, or a empty string '' if this can not be determined.
+   */
+  getSymlinkTarget(dir: Path): Path;
+  
+  /**
+   * @param dir the absolute path of the Symlink
+   * @returns True if the absolute path is a Symlink, false otherwise. 
+   */
+  isSymlink(dir: Path): boolean;
+  
+  /**
+   * @param path the OS dependent relative path
+   * @param parentPath the absolute OS dependent path of the parent directory.
+   * @returns the string that represents the relative path that a Symlink is pointing at.
+   */
+  getSymlinkTargetRelative(relativePath: Path, parentPath: Path): Path;
+  
+  mkdir(dir: string, inDir: Path): void;
+
+  mkdirTree(dirs: Path, inDir: Path): Path;
+
+  read(path: Path, charset?: string): any;
+
+  readJson(path: Path): any;
+
+  rd(dir: string, inDir: Path): void;
+  
+  rm(dir: string, inDir: Path): void;
+
+  /**
+   * create a new symbolic link
+   */
+  slink(slinkName: string, toDir: Path, inDir: Path): void;
+}
 
 /**
 * I_SlinkConsole provides the ability to stub out console.log
@@ -267,13 +320,13 @@ export class FsStub implements I_Fs {
   appendFileSync(
     path: fs.PathOrFileDescriptor,
     data: string | Uint8Array,
-    options?: fs.WriteFileOptions,
+    options?: WriteFileOptions,
   ): void {
     fs.appendFileSync(path, data, options);
   }
 
   /**
-   * @see {@link I_Fs#copyFileSync}
+   * @see {@link I_Fs#_copyFileSync}
    */
   public copyFileSync(src: PathLike, dest: PathLike, mode?: number): void {
     fs.copyFileSync(src, dest, mode);
@@ -313,11 +366,11 @@ export class FsStub implements I_Fs {
     let stats = fs.lstatSync(path);
     return stats.isSymbolicLink();
   }
-  
-  public readFileSync(path: fs.PathOrFileDescriptor, options?: {
+
+  readFileSync(path: PathOrFileDescriptor, options?: {
     encoding?: null | undefined;
     flag?: string | undefined;
-  } | null): string {
+  } | null): string | undefined {
     return fs.readFileSync(path, options).toString();
   }
 }
@@ -429,9 +482,9 @@ export class ShellRunner {
     }
   }
 
-  public run(cmd: string, args: string[], options?: any): any {
+  public run(cmd: string, args: string[], options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     //stubbed for unit testing
-    var ssr: any = this.sSync.spawnSync(cmd, args, options);
+    let ssr: SpawnSyncReturns<string | Buffer<ArrayBufferLike>> = this.sSync.spawnSync(cmd, args, options);
     return ssr;
   }
 }
@@ -765,16 +818,16 @@ export class CliCtx implements I_CliCtx {
     return this.home;
   }
 
-  run(cmd: string, args: string[]): any {
+  run(cmd: string, args: string[]): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     let options = this.sof.getOptions(this, Paths.toOs(this.dir, this.isWindows()), LogLevel.INFO);
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + ' ' + args, ssr, options, LogLevel.INFO);
+    this.logCmd(cmd + ' ' + args, ssr, options);
     return ssr;
   }
   
-  runE(cmd: string, args: string[], options?: any, logLevel?: number): any {
+  runE(cmd: string, args: string[], options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + ' ' + args, ssr, options, logLevel);
+    this.logCmd(cmd + ' ' + args, ssr, options);
     return ssr;
   }
 
@@ -807,10 +860,8 @@ export class CliCtx implements I_CliCtx {
     return this.procIn.isWindows();
   }
 
-
   /**
-   * Checks if the context is set to debug
-   * and if so prints the message, if you want to print regarless use print
+   * Prints to the javascript console and also the log file when logging to a file
    * @param message
    */
   out(message: string) {
@@ -859,49 +910,53 @@ export class CliCtx implements I_CliCtx {
     }
   }
 
-  logCmd(cmdWithArgs: string, spawnSyncReturns: any, options?: any, logLevel?: number): void {
-    var ltop: number = this.isDebug() ? LogLevel.DEBUG : LogLevel.INFO;
-    var ll = ltop;
-    if (logLevel != undefined) {
-      ll = logLevel < ltop? logLevel : ltop ;
-    }
+  logCmd(cmdWithArgs: string, spawnSyncReturns: SpawnSyncReturns<string | Buffer<ArrayBufferLike>>, options?: SpawnSyncOptions): void {
 
     if (this.isDebug()) {
       this.out('ran ' + cmdWithArgs + ' in \n\t' + options.cwd);
     }
     if (options != undefined) {
       if (options.cwd != undefined) {
-        if (ll <= LogLevel.TRACE) {
+        if (this.isDebug()) {
           this.out('\tin ' + options.cwd);
         }
       } else {
-        if (ll <= LogLevel.TRACE) {
+        if (this.isDebug()) {
           this.out('\tin ' + this.getDir());
         }
       }
     } else {
-      if (ll <= LogLevel.TRACE) {
+      if (this.isDebug()) {
         this.out('\tin ' + this.getDir());
       }
     }
-    if (ll <= LogLevel.TRACE) {
+    if (this.isDebug()) {
       this.out('\tand the spawnSyncReturns had;');
     }
     if (spawnSyncReturns.error != undefined) {
-      if (ll <= LogLevel.TRACE) {
-        this.out('\tError: ' + spawnSyncReturns.error);
-        this.out('\t\t' + spawnSyncReturns.error.message);
+      if (this.isDebug()) {
+        this.out('Error: ' + spawnSyncReturns.error);
+        this.out('Error Message: ' + spawnSyncReturns.error.message);
+        this.out('Error Stack: ' +spawnSyncReturns.error.stack);
+        var cause: Error | undefined = spawnSyncReturns.error.cause as Error | undefined;
+        var counter = 1;
+        while (cause != undefined)  {
+          this.out('\n\nError Cause ' + counter +': ' + cause.message);
+          this.out('Error Cause ' + counter +' Stack: ' + cause.stack);
+          cause = cause.cause as Error | undefined;
+          counter++;
+        }
       }
     }
     if (spawnSyncReturns.stderr != undefined) {
-      if (ll <= LogLevel.TRACE) {
+      if (this.isDebug()) {
         this.out('\tStderr: ' + spawnSyncReturns.stderr);
       }
     }
     if (spawnSyncReturns.stdout != undefined) {
       if (this.isDebug()) {
         if (spawnSyncReturns.stdout.length >= 100) {
-          if (ll <= LogLevel.TRACE) {
+          if (this.isDebug()) {
             this.out('\tStdout: ' + spawnSyncReturns.stdout);
           } else {
             this.out('\tStdout: ' + spawnSyncReturns.stdout.slice(0, 100) + ' ... \n');
@@ -930,58 +985,6 @@ export class CliCtx implements I_CliCtx {
   }
 }
 
-export interface I_FsContext {
-  /**
-   * This determines if a path (folder or file) exists.
-   * @param path
-   */
-  existsAbs(path: Path): boolean;
-
-  /**
-   * This determines if a path (folder or file) exists.
-   * @param relativePathParts
-   * @param inDir
-   */
-  exists(fileOrDir: string, inDir: Path): boolean;
-
-  getFs(): I_Fs;
-
-  /**
-   * @param dir the absolute path of the Symlink
-   * @returns The string of the Symlink target, or a empty string '' if this can not be determined.
-   */
-  getSymlinkTarget(dir: Path): Path;
-  
-  /**
-   * @param dir the absolute path of the Symlink
-   * @returns True if the absolute path is a Symlink, false otherwise. 
-   */
-  isSymlink(dir: Path): boolean;
-  
-  /**
-   * @param path the OS dependent relative path
-   * @param parentPath the absolute OS dependent path of the parent directory.
-   * @returns the string that represents the relative path that a Symlink is pointing at.
-   */
-  getSymlinkTargetRelative(relativePath: Path, parentPath: Path): Path;
-  
-  mkdir(dir: string, inDir: Path): void;
-
-  mkdirTree(dirs: Path, inDir: Path): Path;
-
-  read(path: Path, charset?: string): any;
-
-  readJson(path: Path): any;
-
-  rd(dir: string, inDir: Path): void;
-  
-  rm(dir: string, inDir: Path): void;
-
-  /**
-   * create a new symbolic link
-   */
-  slink(slinkName: string, toDir: Path, inDir: Path): void;
-}
 
 export class FsContext implements I_FsContext {
   private ctx: I_CliCtx;
@@ -1134,7 +1137,7 @@ export class FsContext implements I_FsContext {
     try {
       if (this.ctx.isWindows()) {
         //don't use unix files for gitbash here
-        let p: string = Paths.toWindows(path);
+        let p: string = path.toWindows();
         if (this.ctx.isDebug()) {
           this.ctx.out('reading ' + p);
         }
@@ -1159,7 +1162,7 @@ export class FsContext implements I_FsContext {
 
   rd(slinkName: string, inDir: Path): void {
     let sof = this.ctx.getShellOptionsFactory();
-    let inDirP = Paths.toWindows(inDir);
+    let inDirP = inDir.toWindows();
     var options = sof.getOptions(this.ctx, inDirP);
     //var options ={ cwd:  Paths.toUnix(inDir), shell: process.env.SHELL}
     if (this.ctx.isDebug()) {
@@ -1181,7 +1184,7 @@ export class FsContext implements I_FsContext {
     if (this.exists(dir, inDir)) {
       if (this.ctx.isWindows()) {
         //existsSync s broken!
-        this.ctx.runE('rm', ['-fr', dir], {cwd: Paths.toWindows(inDir)});
+        this.ctx.runE('rm', ['-fr', dir], {cwd: inDir.toWindows()});
       } else {
         this.ctx.runE('rm', ['-fr', dir], {cwd: inDir.toUnix()});
       }
@@ -1206,8 +1209,8 @@ export class FsContext implements I_FsContext {
     
     let sof = this.ctx.getShellOptionsFactory();
     if (this.ctx.isWindows()) {
-      let toDirP = Paths.toWindows(toDir);
-      let inDirP = Paths.toWindows(inDir);
+      let toDirP = toDir.toWindows();
+      let inDirP = inDir.toWindows();
       if (this.ctx.isDebug()) {
         this.ctx.out("Linking to " + toDir);
       }
@@ -1449,19 +1452,19 @@ export class Path {
     let parts = parent.getParts().concat(relative.getParts());
     return new Path(parts, false, parent.isWindows());
   }
-  private relative: boolean;
-  private parts: string[];
-  private windows: boolean;
+  private readonly _relative: boolean;
+  private readonly _parts: string[];
+  private readonly _windows: boolean;
 
 
 
   constructor(parts: string[], relative?: boolean, windows?: boolean) {
     if (relative == undefined) {
-      this.relative = false;
+      this._relative = false;
     } else {
-      this.relative = relative;
+      this._relative = relative;
     }
-    this.parts = parts;
+    this._parts = parts;
     for (var i = 0; i < parts.length; i++) {
       if (parts[i] == undefined) {
         throw Error(Path.PARTS_MUST_HAVE_VALID_STRINGS + parts);
@@ -1469,60 +1472,60 @@ export class Path {
         throw Error(Path.PARTS_MUST_HAVE_NON_EMPTY_STRINGS + parts);
       }
     }
-    if (this.parts.length == 0 && this.relative != false) {
+    if (this._parts.length == 0 && this._relative != false) {
       throw Error(Path.RELATIVE_PARTS_MUST_HAVE_ENTRIES + parts);
     }
     if (windows == undefined) {
-      this.windows = false;
+      this._windows = false;
     } else {
-      this.windows = windows;
+      this._windows = windows;
     }
   }
 
   public hasParent(): boolean {
-    if (this.parts.length >= 2) {
+    if (this._parts.length >= 2) {
       return true;
     }
     return false;
   }
-  public isRelative(): boolean { return this.relative; }
+  public isRelative(): boolean { return this._relative; }
   public isRoot(): boolean {
-    if (this.relative) {
+    if (this._relative) {
       return false;
     }
-    if (this.windows) {
-      if (this.parts.length == 1) {
+    if (this._windows) {
+      if (this._parts.length == 1) {
         return true;
       }
     } else {
-      if (this.parts.length == 0) {
+      if (this._parts.length == 0) {
         return true;
       }
     }
     return false;
   }
-  public isWindows(): boolean { return this.windows; }
-  public getParts(): string[] { return this.parts.slice(0, this.parts.length); }
+  public isWindows(): boolean { return this._windows; }
+  public getParts(): string[] { return this._parts.slice(0, this._parts.length); }
   public getParent(): Path {
-    if (this.parts.length >= 2) {
-      return new Path(this.parts.slice(0, this.parts.length - 1), this.relative, this.windows);
+    if (this._parts.length >= 2) {
+      return new Path(this._parts.slice(0, this._parts.length - 1), this._relative, this._windows);
     } else {
       throw new Error("The path " + this.toPathString() + " has no parents! ");
     }
   }
-  public toString(): string { return 'Path [parts=[' + this.parts + '], relative=' + this.relative + ', windows=' + this.windows + ']' }
+  public toString(): string { return 'Path [parts=[' + this._parts + '], relative=' + this._relative + ', windows=' + this._windows + ']' }
   public toPathString(): string {
     var r: string = '';
-    if (this.windows) {
-      if (this.relative) {
-        r = r.concat(this.parts[0] + '\\');
+    if (this._windows) {
+      if (this._relative) {
+        r = r.concat(this._parts[0] + '\\');
         return this.concat(r, '\\');
       } else {
-        r = r.concat(this.parts[0] + ':\\');
+        r = r.concat(this._parts[0] + ':\\');
         return this.concat(r, '\\');
       }
     } else {
-      if (this.relative) {
+      if (this._relative) {
         return this.concat(r, '/');
       } else {
         r = r.concat('/');
@@ -1532,10 +1535,10 @@ export class Path {
   }
   public toUnix(): string {
     let b = '';
-    if (!this.relative) {
+    if (!this._relative) {
       b = '/';
     }
-    let pp: string[] = this.parts;
+    let pp: string[] = this._parts;
     for (var i = 0; i < pp.length; i++) {
       let p = pp[i];
       if (i == pp.length - 1) {
@@ -1546,28 +1549,47 @@ export class Path {
     }
     return b;
   }
-  
+
+  toWindows(): string {
+    let b = '';
+    let pp: string[] = this._parts;
+    for (var i = 0; i < pp.length; i++) {
+      if (i == 0) {
+        if (pp[0].length == 1) {
+          b = pp[0].toUpperCase() + ':\\';
+        } else {
+          b = pp[0].concat('\\');
+        }
+      } else if (i == pp.length - 1) {
+        b = b.concat(pp[i]);
+      } else {
+        b = b.concat(pp[i]).concat('\\');
+      }
+    }
+    return b;
+  }
+
   public child(path: string) {
-    return new Path(this.getParts().concat(path), this.relative, this.windows);
+    return new Path(this.getParts().concat(path), this._relative, this._windows);
   }
 
   private concat(start: string, sep: string): string {
     var r: string = start;
     if (this.isWindows()) {
-      for (var i = 1; i < this.parts.length; i++) {
-        if (this.parts.length - 1 == i) {
-          r = r.concat(this.parts[i]);
+      for (var i = 1; i < this._parts.length; i++) {
+        if (this._parts.length - 1 == i) {
+          r = r.concat(this._parts[i]);
         } else {
-          r = r.concat(this.parts[i]).concat(sep);
+          r = r.concat(this._parts[i]).concat(sep);
         }
       }
       return r;
     } else {
-      for (var i = 0; i < this.parts.length; i++) {
-        if (this.parts.length - 1 == i) {
-          r = r.concat(this.parts[i]);
+      for (var i = 0; i < this._parts.length; i++) {
+        if (this._parts.length - 1 == i) {
+          r = r.concat(this._parts[i]);
         } else {
-          r = r.concat(this.parts[i]).concat(sep);
+          r = r.concat(this._parts[i]).concat(sep);
         }
       }
       return r;
@@ -1604,7 +1626,7 @@ export class Paths {
 
   static toOs(parts: Path, isWindows: boolean): string {
     if (isWindows) {
-      return this.toWindows(parts);
+      return parts.toWindows();
     } else {
       return parts.toUnix();
     }
@@ -1666,51 +1688,6 @@ export class Paths {
     }
   }
 
-  static toUnixPath(path: string): string {
-    return this.toPath(path, false).toUnix();
-  }
-
-  static toWindows(parts: Path): string {
-    let b = '';
-    let pp: string[] = parts.getParts();
-    for (var i = 0; i < pp.length; i++) {
-      if (i == 0) {
-        if (pp[0].length == 1) {
-          b = pp[0].toUpperCase() + ':\\';
-        } else {
-          b = pp[0].concat('\\');
-        }
-      } else if (i == pp.length - 1) {
-        b = b.concat(pp[i]);
-      } else {
-        b = b.concat(pp[i]).concat('\\');
-      }
-    }
-    return b;
-  }
-
-  static toWindowsPath(parts: string): string {
-    return this.toWindows(this.toPath(parts, false));
-  }
-  
-  static toWindowsQuad(parts: Path): string {
-    let b = '';
-    let pp: string[] = parts.getParts();
-    for (var i = 0; i < pp.length; i++) {
-      if (i == 0) {
-        if (pp[0].length == 1) {
-          b = pp[0].toUpperCase() + ':\\\\';
-        } else {
-          b = pp[0].concat('\\\\');
-        }
-      } else if (i == pp.length - 1) {
-        b = b.concat(pp[i]);
-      } else {
-        b = b.concat(pp[i]).concat('\\\\');
-      }
-    }
-    return b;
-  }
 }
 
 export class SLinkRunner {
