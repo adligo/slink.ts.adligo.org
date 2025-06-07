@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "node build.cjs --install-local",
-    "test": "test",
+    "test": "echo see https://github.com/adligo/slink_tests.ts.adligo.org",
     "tsc": "tsc"
   },
   "sharedNodeModuleProjectSLinkEnvVar": [
@@ -47,5 +47,5 @@
   ],
   "type": "commonjs",
   "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.5.6.c"
+  "version": "1.5.7"
 }

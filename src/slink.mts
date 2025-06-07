@@ -24,7 +24,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.6.d";
+export const VERSION_NBR: string = "1.5.7";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
