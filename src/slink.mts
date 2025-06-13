@@ -16,8 +16,7 @@
  */
 import {Buffer} from 'buffer';
 import * as fs from 'fs';
-import { PathLike, PathOrFileDescriptor, WriteFileOptions } from 'fs';
-import { FileReadOptions } from "node:fs/promises";
+import {PathLike, PathOrFileDescriptor, WriteFileOptions} from 'fs';
 import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 
 // ###########################  Constants ################################
@@ -255,6 +254,31 @@ export interface I_SlinkConsole {
 }
 
 /**
+ * I_Path represents a directory and or file path
+ */
+interface I_Path {
+  hasParent(): boolean;
+
+  isRelative(): boolean;
+
+  isRoot(): boolean;
+
+  isWindows(): boolean;
+
+  getParts(): string[];
+
+  getParent(): I_Path;
+
+  toString(): string;
+
+  toUnix(): string;
+
+  toWindows(): string;
+
+  child(path: string): I_Path;
+}
+
+/**
  * I_Proc provides the ability to stub out process.env and process.env.SHELL
  * for testing
  */
@@ -379,7 +403,7 @@ export class FsStub implements I_Fs {
   }
 
   readFileSync(path: PathOrFileDescriptor, options?: {
-    encoding?: null | undefined;
+    encoding?: string | undefined;
     flag?: string | undefined;
   } | null): string | undefined {
     return fs.readFileSync(path, options).toString();
@@ -1455,7 +1479,7 @@ export class PackageJsonComparator {
 
 }
 
-export class Path {
+export class Path implements I_Path {
   public static PARTS_MUST_HAVE_VALID_STRINGS = 'Parts must have valid strings! ';
   public static PARTS_MUST_HAVE_NON_EMPTY_STRINGS = 'Parts must have non-empty strings! ';
   public static RELATIVE_PARTS_MUST_HAVE_ENTRIES = 'Relative parts must have entries! ';
@@ -1493,14 +1517,18 @@ export class Path {
     }
   }
 
-  public hasParent(): boolean {
+  hasParent(): boolean {
     if (this._parts.length >= 2) {
       return true;
     }
     return false;
   }
-  public isRelative(): boolean { return this._relative; }
-  public isRoot(): boolean {
+
+  isRelative(): boolean {
+    return this._relative;
+  }
+
+  isRoot(): boolean {
     if (this._relative) {
       return false;
     }
@@ -1515,17 +1543,28 @@ export class Path {
     }
     return false;
   }
-  public isWindows(): boolean { return this._windows; }
-  public getParts(): string[] { return this._parts.slice(0, this._parts.length); }
-  public getParent(): Path {
+
+  isWindows(): boolean {
+    return this._windows;
+  }
+
+  getParts(): string[] {
+    return this._parts.slice(0, this._parts.length);
+  }
+
+  getParent(): Path {
     if (this._parts.length >= 2) {
       return new Path(this._parts.slice(0, this._parts.length - 1), this._relative, this._windows);
     } else {
       throw new Error("The path " + this.toPathString() + " has no parents! ");
     }
   }
-  public toString(): string { return 'Path [parts=[' + this._parts + '], relative=' + this._relative + ', windows=' + this._windows + ']' }
-  public toPathString(): string {
+
+  toString(): string {
+    return 'Path [parts=[' + this._parts + '], relative=' + this._relative + ', windows=' + this._windows + ']'
+  }
+
+  toPathString(): string {
     var r: string = '';
     if (this._windows) {
       if (this._relative) {
@@ -1544,7 +1583,8 @@ export class Path {
       }
     }
   }
-  public toUnix(): string {
+
+  toUnix(): string {
     let b = '';
     if (!this._relative) {
       b = '/';
@@ -1580,7 +1620,7 @@ export class Path {
     return b;
   }
 
-  public child(path: string) {
+  child(path: string) {
     return new Path(this.getParts().concat(path), this._relative, this._windows);
   }
 
