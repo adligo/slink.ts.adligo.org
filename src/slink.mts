@@ -403,7 +403,7 @@ export class FsStub implements I_Fs {
   }
 
   readFileSync(path: PathOrFileDescriptor, options?: {
-    encoding?: string | undefined;
+    encoding?: BufferEncoding | undefined;
     flag?: string | undefined;
   } | null): string | undefined {
     return fs.readFileSync(path, options).toString();
