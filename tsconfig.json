@@ -4,11 +4,11 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "lib": [
-      "ES2024"
+      "ESNext"
     ],
     "target": "ES2024",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "dist",
     "resolveJsonModule": true,
     "sourceMap": true
