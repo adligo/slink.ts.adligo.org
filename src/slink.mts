@@ -24,7 +24,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.7";
+export const VERSION_NBR: string = "1.5.8";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -183,10 +183,7 @@ export interface I_Fs {
   /**
    * Reads a file
    */
-  readFileSync(path: PathOrFileDescriptor, options?: {
-    encoding?: null | undefined;
-    flag?: string | undefined;
-  } | null): string | undefined;
+  readFileSync(path: PathOrFileDescriptor, optionsFlag?: string | undefined): string | undefined;
 }
 
 /**
@@ -378,10 +375,11 @@ export class FsStub implements I_Fs {
     return fs.readdirSync(path, options);
   }
 
-  readFileSync(path: PathOrFileDescriptor, options?: {
-    encoding?: null | undefined;
-    flag?: string | undefined;
-  } | null): string | undefined {
+  readFileSync(path: PathOrFileDescriptor, optionsFlag?: string | undefined): string | undefined {
+    let options = null;
+    if (optionsFlag != null && optionsFlag != undefined) {
+      options ={ flag: optionsFlag }
+    }
     return fs.readFileSync(path, options).toString();
   }
 }
