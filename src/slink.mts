@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.8";
+export const VERSION_NBR: string = "1.5.9";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -1085,7 +1085,7 @@ export class FsContext implements I_FsContext {
         */
         //let cmd = 'echo `[[ -d "test_data" || -f "test_data" ]] && echo "YES" || echo "NO"`';
         let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
-            '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
+            '" || -L "' + path.toUnix() + '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
         let options = sof.getOptionsShell(this.ctx,);
         let ssr: any = this.ctx.runE(cmd, [], options);
         return this.funSsrExists(ssr, this.ctx, path);
