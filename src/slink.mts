@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.5.9";
+export const VERSION_NBR: string = "1.6.0a";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -517,6 +517,18 @@ export class ShellRunner {
 
   public run(cmd: string, args: string[], options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     //stubbed for unit testing
+    // fix to 
+    // [DEP0190] DeprecationWarning: Passing args to a child process with 
+    // shell option true can lead to security vulnerabilities, as the arguments 
+    // are not escaped, only concatenated.
+    //
+    // https://github.com/nodejs/help/issues/5063
+    // https://github.com/nodejs/help/issues/5072
+    /*
+    this.console.out("ShellRunner Running '" + nc + "'");
+    this.console.out("cmd is " + cmd);
+    this.console.out("args are " + JSON.stringify(args);
+    */
     let ssr: SpawnSyncReturns<string | Buffer<ArrayBufferLike>> = this.sSync.spawnSync(cmd, args, options);
     return ssr;
   }
@@ -854,13 +866,21 @@ export class CliCtx implements I_CliCtx {
   run(cmd: string, args: string[]): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     let options = this.sof.getOptions(this, Paths.toOs(this.dir, this.isWindows()), LogLevel.INFO);
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + ' ' + args, ssr, options);
+    var nc = cmd
+    if (args.length >= 1) {
+      nc += ' ' + args.join(' ');
+    }
+    this.logCmd(nc, ssr, options);
     return ssr;
   }
   
   runE(cmd: string, args: string[], options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
     let ssr =  this.shellRun.run(cmd, args, options);
-    this.logCmd(cmd + ' ' + args, ssr, options);
+    var nc = cmd
+    if (args.length >= 1) {
+      nc += ' ' + args.join(' ');
+    }
+    this.logCmd(nc, ssr, options);
     return ssr;
   }
 
