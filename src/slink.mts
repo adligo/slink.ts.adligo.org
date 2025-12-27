@@ -1804,8 +1804,8 @@ export class SLinkRunner {
           this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
           return true; // Use the first valid environment variable
         } else {
-          this.ctx.print(`The following path does NOT seem to exist;\n\t${envValPath}`);
-          this.fsCtx.
+          this.ctx.getProc().error('The following path does NOT seem to exist;\n\t${envValPath}\nUnable to complete successfully, process.exit(' + 1808 + ')');
+          this.ctx.getProc().exit(1808);
         }
       } else {
         this.ctx.print(`Environment variable ${envVar} NOT found or empty`);
