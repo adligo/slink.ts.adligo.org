@@ -83,7 +83,15 @@ for (var i = 2; i < process.argv.length; i++) {
       run(npm, ['run', 'tsc'], options);
       run(npm, ['install', '-g', '.'], options);
       break;
-    default: throw Error('Unknown flag / argument ' + process.argv[i]);
+    default:
+      console.log('processing default build.cjs ' + process.env.SHELL)
+      options = new Object();
+      options.cwd = projectPath
+      options.shell = process.env.SHELL
+      run('rm', ['-fr', 'dist'], options);
+      console.log('running tsc')
+      run(npm, ['run', 'tsc'], options);
+      break;
   }
 }
 

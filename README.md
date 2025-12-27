@@ -82,12 +82,20 @@ In Example, under the root package.json object add the attribute;
   }],
 ```
 
+## Build Locally
+You can build SLink locally with npm;
+
+```
+cd slink.mts.adligo.org
+npm run build
+```
+
 ## Install Locally
 You can install this slink command line application locally with npm;
 
 ```
 cd slink.mts.adligo.org
-npm run build
+npm run install
 ```
 
 

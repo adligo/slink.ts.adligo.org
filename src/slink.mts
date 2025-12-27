@@ -1783,9 +1783,8 @@ export class SLinkRunner {
     for (const envVar of envVars) {
       const envValue = this.ctx.getProc().envVar(envVar);
       if (envValue) {
-        if (this.ctx.isDebug()) {
-          this.ctx.out(`Found environment variable ${envVar} with value ${envValue}`);
-        }
+        this.ctx.print(`Found environment variable ${envVar} with value ${envValue}`);
+        
         let envValPath = Paths.newPath(envValue, false,  this.ctx.isWindows());
         if (this.fsCtx.existsAbs(envValPath)) {
           if (this.fsCtx.exists('node_modules', this.ctx.getDir())) {
@@ -1804,6 +1803,9 @@ export class SLinkRunner {
 
           this.fsCtx.slink('node_modules', targetPath, this.ctx.getDir());
           return true; // Use the first valid environment variable
+        } else {
+          this.ctx.print(`The following path does NOT seem to exist;\n\t${envValPath}`);
+          this.fsCtx.
         }
       } else {
         this.ctx.print(`Environment variable ${envVar} NOT found or empty`);

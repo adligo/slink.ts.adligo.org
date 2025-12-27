@@ -34,7 +34,8 @@
     "url": "git+https://github.com/adligo/slink.ts.adligo.org.git"
   },
   "scripts": {
-    "build": "node --disable-warning=DEP0190 build.cjs --install-local",
+    "build": "node --disable-warning=DEP0190 build.cjs",
+    "install": "node --disable-warning=DEP0190 build.cjs --install-local",
     "test": "echo see https://github.com/adligo/slink_tests.ts.adligo.org",
     "tsc": "tsc"
   },
