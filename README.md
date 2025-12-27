@@ -25,6 +25,10 @@ slink
 slink --path `pwd`
 ```
 
+## The SLink Build Matrix
+
+In order to run the entire build with tests etc you will want to use the [SLink Build Matrix Project](https://github.com/adligo/slink_bm.ts.adligo.org).
+
 ## Alternativly you can build slink from scratch @see the git repository;
 
 [SLink](https://github.com/adligo/slink.ts.adligo.org)
