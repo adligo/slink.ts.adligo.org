@@ -38,6 +38,7 @@
     "test": "echo see https://github.com/adligo/slink_tests.ts.adligo.org",
     "tsc": "tsc"
   },
+  
   "sharedNodeModuleProjectSLinkEnvVar": [
     "SLINK_NODE_MODULE_SLINK"
   ],
