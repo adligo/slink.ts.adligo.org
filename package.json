@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "node --disable-warning=DEP0190 build.cjs",
-    "install": "node --disable-warning=DEP0190 build.cjs --install-local",
+    "install-slink": "node --disable-warning=DEP0190 build.cjs --install-local",
     "test": "echo see https://github.com/adligo/slink_tests.ts.adligo.org",
     "tsc": "tsc"
   },

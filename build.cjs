@@ -60,7 +60,8 @@ function run(cmd, args, options) {
   out(cc, spawnSync(cmd, args, options));
 }
 
-console.log(process.env);
+//disabled for shared builds as the environment is then shown in the Jenkins console logs
+//console.log(process.env);
 function getShell() {
   return '/usr/bin/bash';
 }
@@ -69,9 +70,12 @@ var currentShell = getShell();
 console.log(`The shell being used is: ${currentShell}`);
 
 console.log('in build.cjs with ' + process.argv)
+
+var processed = false;
 for (var i = 2; i < process.argv.length; i++) {
   switch (process.argv[i]) {
     case '--install-local':
+      processed = true
       console.log('processing --install-local ' + process.env.SHELL)
       options = new Object();
       options.cwd = projectPath
@@ -83,15 +87,16 @@ for (var i = 2; i < process.argv.length; i++) {
       run(npm, ['run', 'tsc'], options);
       run(npm, ['install', '-g', '.'], options);
       break;
-    default:
-      console.log('processing default build.cjs ' + process.env.SHELL)
-      options = new Object();
-      options.cwd = projectPath
-      options.shell = process.env.SHELL
-      run('rm', ['-fr', 'dist'], options);
-      console.log('running tsc')
-      run(npm, ['run', 'tsc'], options);
-      break;
   }
+}
+
+if (!processed) {
+  console.log('processing default build.cjs ' + process.env.SHELL)
+  options = new Object();
+  options.cwd = projectPath
+  options.shell = process.env.SHELL
+  run('rm', ['-fr', 'dist'], options);
+  console.log('running tsc')
+  run(npm, ['run', 'tsc'], options);
 }
 
