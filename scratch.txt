@@ -1,0 +1,9 @@
+isSymlink
+publishLocal 1986
+copyFileSync
+SLinkRunner
+SpawnSyncStub 338
+ShellRunner 503
+runE 877
+
+1111 & 1125 cmdArgs

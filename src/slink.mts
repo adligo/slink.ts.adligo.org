@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.6.0a";
+export const VERSION_NBR: string = "1.6.0";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -875,6 +875,9 @@ export class CliCtx implements I_CliCtx {
   }
   
   runE(cmd: string, args: string[], options?: SpawnSyncOptions): SpawnSyncReturns<string | Buffer<ArrayBufferLike>> {
+    if (this.map.has(DEBUG.cmd)) {
+      this.out('runE ' + cmd + " args are " + JSON.stringify(args));
+    }
     let ssr =  this.shellRun.run(cmd, args, options);
     var nc = cmd
     if (args.length >= 1) {
@@ -1104,10 +1107,15 @@ export class FsContext implements I_FsContext {
         var t = this.funSsrExists(ssr, this.ctx, path);
         */
         //let cmd = 'echo `[[ -d "test_data" || -f "test_data" ]] && echo "YES" || echo "NO"`';
-        let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
-            '" || -L "' + path.toUnix() + '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
+        //original         
+        // let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
+        //            '" || -L "' + path.toUnix() + '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
+        let cmd = 'echo';
+        let cmdArgs: string  = '`[[ -d \"' + path.toUnix() + '\" || -f \"' + path.toUnix() +
+                    '\" || -L \"' + path.toUnix() + '\" ]] && echo \"YES-EXISTS\" || echo \"NO-NOT-EXISTS\"`';
+        let cmdArgsSplit: string [] = cmdArgs.split(" ");
         let options = sof.getOptionsShell(this.ctx,);
-        let ssr: any = this.ctx.runE(cmd, [], options);
+        let ssr: any = this.ctx.runE(cmd, cmdArgsSplit, options);
         return this.funSsrExists(ssr, this.ctx, path);
       } else {
         let options = sof.getOptions(this.ctx, Paths.toOs(path, this.ctx.isWindows()));
@@ -1116,12 +1124,18 @@ export class FsContext implements I_FsContext {
       }
     } else {
       let options = sof.getOptionsShell(this.ctx);
-      let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
-          '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
+      // original
+      // let cmd = 'echo `[[ -d "' + path.toUnix() + '" || -f "' + path.toUnix() +
+      // '" ]] && echo "YES-EXISTS" || echo "NO-NOT-EXISTS"`';
+          
+      let cmd = 'echo';
+      let cmdArgs: string = '`[[ -d \"' + path.toUnix() + '\" || -f \"' + path.toUnix() +
+          '\" ]] && echo \"YES-EXISTS\" || echo \"NO-NOT-EXISTS\"`';
+      let cmdArgsSplit: string [] = cmdArgs.split(" ");
       if (this.ctx.isDebug()) {
         this.ctx.out('Executing cmd ' + cmd);
       }
-      let ssr: any = this.ctx.runE(cmd, [],options);
+      let ssr: any = this.ctx.runE(cmd, cmdArgsSplit,options);
       return this.funSsrExists(ssr, this.ctx, path);
     }
 
@@ -1970,6 +1984,12 @@ export class SLinkRunner {
   
 
   private publishLocal() {
+    if (!this.fsCtx.exists('node_modules', this.ctx.getDir())) {
+      this.ctx.out("The node_modules directory doesn't exist in the following path;");
+      this.ctx.out(this.ctx.getDir().toPathString());
+      this.ctx.out("Try running slink first with out the -p / --publish-local flag?");
+      return;
+    }
     let nmPath = this.ctx.getDir().child('node_modules');
     if (!this.fsCtx.isSymlink(nmPath)) {
       this.ctx.out('The node_modules directory is not a symlink, please run slink with out arguments to replace your current node_modules directory.');
@@ -1981,6 +2001,7 @@ export class SLinkRunner {
     let name = pkg.name;
     let packageDirParts = name.split('/');
     let nextPath = new Path(target.getParts(), false, this.ctx.isWindows());
+    
     for (var i =0; i < packageDirParts.length; i++) {
       let nextPathParent = nextPath;
       nextPath = nextPath.child(packageDirParts[i]);
@@ -1992,6 +2013,7 @@ export class SLinkRunner {
         this.fsCtx.mkdir(packageDirParts[i], nextPathParent);
         created = true;
       }
+      
       if (i == packageDirParts.length - 1) {
         if (!created) {
           if (this.fsCtx.existsAbs(nextPath)) {
@@ -1999,13 +2021,17 @@ export class SLinkRunner {
               this.ctx.out('Removing and recreating ' + packageDirParts[i] + ' in ' + nextPathParent.toPathString());
             }
             this.fsCtx.rm(packageDirParts[i], nextPathParent);
+            //the next line causes this warning to printout
+            //  [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, 
+            // as the arguments are not escaped, only concatenated.
+            // this was eventually defeated by a custom slink.sh script with the --disable-warning=DEP0190
+            // being passed in the internal node slink script that ends up in nvmInstall/nodejs/slink
             this.fsCtx.mkdir(packageDirParts[i], nextPathParent);
           }
         }
       }
     }
-    
-    
+    // before here?
     let destPkgPath = nextPath.child('package.json');
     if (this.ctx.isDebug()) {
       this.ctx.out('Copying package.json from \n\t' + pkgPath.toPathString() + '\n to \n\t' + destPkgPath.toPathString());

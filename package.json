@@ -18,6 +18,9 @@
     "child_process": "^1.0.2",
     "typescript": "^5.0.4"
   },
+  "files": [
+    "dist"
+  ],
   "homepage": "https://github.com/adligo/slink.ts.adligo.org#readme",
   "keywords": [
     "symbolic",
@@ -49,5 +52,5 @@
   ],
   "type": "commonjs",
   "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.6.0a"
+  "version": "1.6.0"
 }
