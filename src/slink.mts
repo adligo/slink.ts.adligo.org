@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.6.0";
+export const VERSION_NBR: string = "1.6.1b";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -2032,6 +2032,7 @@ export class SLinkRunner {
       }
     }
     // before here?
+    
     let destPkgPath = nextPath.child('package.json');
     if (this.ctx.isDebug()) {
       this.ctx.out('Copying package.json from \n\t' + pkgPath.toPathString() + '\n to \n\t' + destPkgPath.toPathString());
