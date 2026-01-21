@@ -93,12 +93,23 @@ cd slink.mts.adligo.org
 npm run build
 ```
 
+## Link Locally
+You can link this slink command line application locally with npm;
+
+```
+cd slink.mts.adligo.org
+npm run link-slink
+```
+
 ## Install Locally
 You can install this slink command line application locally with npm;
 
 ```
-cd slink.mts.adligo.org
-npm run install
+npm build
+npm pack
+npm install -g <packOuputFileName/>
+i.e.
+npm install -g ts.adligo.org-slink-1.6.1d.tgz
 ```
 
 <b>Note:</b>
