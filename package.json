@@ -10,9 +10,6 @@
   "dependencies": {
     "npm": "^11.7.0"
   },
-  "bundleDependencies": [
-    "npm"
-  ],
   "devDependencies": {
     "@types/node": "^25.0.9",
     "child_process": "^1.0.2",
@@ -52,5 +49,5 @@
   ],
   "type": "commonjs",
   "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.6.1d"
+  "version": "1.6.1e"
 }
