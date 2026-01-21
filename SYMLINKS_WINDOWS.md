@@ -41,6 +41,17 @@ source ~/.bash_profile
 echo $MKLINK_CMD
 ```
 
+You can also use GitBash and pipes to accomplish this;
+
+```
+# junction directory links
+echo 'mklink /J foo someFolderOnYourComputer` | cmd 
+# file links
+echo 'mklink /D foo someFolderOnYourComputer` | cmd 
+# remove either symlink the correct way
+echo 'rd foo' | cmd
+```
+
 Finally note I have the path to the windows command 'cmd' hard coded to ( C:\Windows\system32\cmd), you can simply recompile the source 
 if you want to change this.
 

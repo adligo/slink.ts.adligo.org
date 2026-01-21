@@ -52,5 +52,5 @@
   ],
   "type": "commonjs",
   "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.6.1c"
+  "version": "1.6.1d"
 }

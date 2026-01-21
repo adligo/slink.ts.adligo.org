@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.6.1b";
+export const VERSION_NBR: string = "1.6.1d";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -1237,7 +1237,9 @@ export class FsContext implements I_FsContext {
       this.ctx.out("Removing link named " + slinkName);
     }
 
-    let result = this.ctx.runE('echo \'rd .\\' + slinkName + '\' | cmd',[], options, LogLevel.TRACE);
+    let sArgs = "\'rd .\\" + slinkName + "\' | cmd";
+    let splitArgs = sArgs.split(" ");
+    let result = this.ctx.runE('echo',splitArgs, options, LogLevel.TRACE);
     if (this.ctx.isDebug()) {
       this.ctx.out("rd result stdout is " + result.stdout);
       this.ctx.out("rd result stderr is " + result.stderr);
@@ -1291,7 +1293,9 @@ export class FsContext implements I_FsContext {
         this.ctx.out("pwdResult is \n\t" + pwdResult.stdout);
       }
       
-      let result = this.ctx.runE('echo \'mklink /J ' + slinkName + ' ' + toDirP +'\' | cmd',[], options, LogLevel.TRACE);
+      let sArgs: string = "\'mklink /J " + slinkName + " " + toDirP + "\' | cmd";
+      let splitArgs: string[] = sArgs.split(" ");
+      let result = this.ctx.runE('echo', splitArgs , options, LogLevel.TRACE);
       if (this.ctx.isDebug()) {
         this.ctx.out("mklink result.stdout is \n\t" + result.stdout);
         this.ctx.out("mklink result.stderr is \n\t" + result.stderr);
