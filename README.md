@@ -8,9 +8,6 @@ To install slink run the following command;
 npm install -g @ts.adligo.org/slink
 ```
 
-<b>Note:</b> If you install it from npm directly you will continue to get the DepricationWarning DEP0190.  
-We now recommend you install from a source download and npm on your local machine!
-
 ## Uninstall the package;
 
 ```

@@ -7,9 +7,6 @@
     "url": "https://github.com/adligo/slink.ts.adligo.org/issues"
   },
   "description": "This is a simple Type Script Application that will create symbolic links from webpack config files with links created by webpack-link inside of your source folder, which improves speed of changing upstream Javascript or Typescript in a multiple project system.",
-  "dependencies": {
-    "npm": "^11.7.0"
-  },
   "devDependencies": {
     "@types/node": "^25.0.9",
     "child_process": "^1.0.2",
@@ -47,7 +44,7 @@
     "slink_group_deps.ts.adligo.org",
     "fab_group_deps.ts.adligo.org"
   ],
-  "type": "commonjs",
-  "package.json.version": "Search for package.json.version in slink.ts and sync the version string!",
-  "version": "1.6.1e"
+  "type": "module",
+  "package.json.version": "Search for package.json.version in slink.mts and sync the version string!",
+  "version": "1.6.1h"
 }

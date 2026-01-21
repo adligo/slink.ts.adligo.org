@@ -86,8 +86,6 @@ for (var i = 2; i < process.argv.length; i++) {
       console.log('running tsc')
       run(npm, ['run', 'tsc'], options);
       run(npm, ['install', '-g', '.'], options);
-      //total hack to pass this to --disable-warning=DEP0190
-      run('cp', ['src/slink.sh', '`which slink`'], options);
       break;
   }
 }
