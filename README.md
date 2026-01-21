@@ -105,7 +105,7 @@ npm run link-slink
 You can install this slink command line application locally with npm;
 
 ```
-npm build
+npm run build
 npm pack
 npm install -g <packOuputFileName/>
 i.e.
