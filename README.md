@@ -105,8 +105,12 @@ You can install this slink command line application locally with npm;
 npm run build
 npm pack
 npm install -g <packOuputFileName/>
-i.e.
-npm install -g ts.adligo.org-slink-1.6.1d.tgz
+# i.e.
+# npm install -g ts.adligo.org-slink-1.6.1d.tgz
+# Then update the executable shim to include --disable-warning=DEP0190 if you want
+which slink
+cat `which slink`
+cp src/slink.sh `which slink`
 ```
 
 <b>Note:</b>
