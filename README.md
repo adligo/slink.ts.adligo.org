@@ -8,6 +8,17 @@ To install slink run the following command;
 npm install -g @ts.adligo.org/slink
 ```
 
+## Verify slink
+
+```
+cd ~
+git clone https://github.com/adligo/pub-keys.adligo.org.git
+slink --version
+npm view @ts.adligo.org/slink dist.integrity > slink.sha512
+cat slink.sha512
+diff slink.sha512 ~/pub-keys.adligo.org/pub-keys/com/npmjs/ts.adligo.org/slink/slink_1.6.0.sha512
+```
+
 ## Uninstall the package;
 
 ```
