@@ -23,7 +23,7 @@ import {spawnSync, SpawnSyncOptions, SpawnSyncReturns} from 'child_process';
 //The old code would read from the package.json file that this deploys with, now we need to sync manually oh well
 // also update this in the package.json file
 // package.json.version
-export const VERSION_NBR: string = "1.6.1h";
+export const VERSION_NBR: string = "1.7.0";
 
 // ########################### Interfaces ##################################
 export interface I_CliCtx {
@@ -675,7 +675,7 @@ export class CliCtx implements I_CliCtx {
    * sometime you need to pass it in.
    */
   private dir: Path;
-  private console: I_SlinkConsole;
+  private iconsole: I_SlinkConsole;
   private log: I_CliCtxLog;
   private shellRun: ShellRunner;
   private fsc: FsContext;
@@ -698,8 +698,14 @@ export class CliCtx implements I_CliCtx {
    * @param fs
    * @param proc a wrapper around 'proccess' to stub out things like 'process.env'
    */
-  constructor(flags: I_CliCtxFlag[], args?: string[], log?: I_CliCtxLog, console?: I_SlinkConsole, fs?: I_Fs, proc?: I_Proc) {
+  constructor(flags: I_CliCtxFlag[], args?: string[], log?: I_CliCtxLog, iconsole?: I_SlinkConsole, fs?: I_Fs, proc?: I_Proc) {
     // do proc and args
+    /*
+    console.log("args are " + args.length);
+    for (var i = 0; i < args.length; i++) {
+      console.log('' + args[i]);
+    }
+    */
     if (proc != undefined) {
       this.procIn = proc;
     } else {
@@ -715,10 +721,10 @@ export class CliCtx implements I_CliCtx {
     } else {
       this.log = log;
     }
-    if (console != undefined) {
-      this.console = console;
+    if (iconsole != undefined) {
+      this.iconsole = iconsole;
     } else {
-      this.console = new SlinkConsoleStub();
+      this.iconsole = new SlinkConsoleStub();
     }
     if (fs != undefined) {
       this.fsc = new FsContext(this, fs);
@@ -735,7 +741,7 @@ export class CliCtx implements I_CliCtx {
     }
     */
 
-    this.shellRun = new ShellRunner(this.console, new SpawnSyncStub(), LogLevel.INFO);
+    this.shellRun = new ShellRunner(this.iconsole, new SpawnSyncStub(), LogLevel.INFO);
 
     let allFlags: CliCtxFlag[] = new Array(flags.length);
     let map2Cmds: Map<string, CliCtxFlag> = new Map();
@@ -759,7 +765,7 @@ export class CliCtx implements I_CliCtx {
     this.home = Paths.toPath(new Path(homeParts.slice(0, homeParts.length - 2), false, this.isWindows()).toPathString(), false);
     for (var i = 2; i < args.length; i++) {
       let a = args[i];
-      //out('processing cli arg ' + a);
+      //this.out('processing cli arg ' + a);
       if (a.length < 2) {
         let a = i - 1;
         throw Error('Unable to parse command line arguments, issue at argument; ' + a);
@@ -798,21 +804,21 @@ export class CliCtx implements I_CliCtx {
     }
     if (this.map.get(HELP.cmd) != undefined) {
       //print the help menu;
-      this.console.out('This program understands the following commands;\n');
+      this.iconsole.out('This program understands the following commands;\n');
       for (var i = 0; i < flags.length; i++) {
         let flag: I_CliCtxFlag = flags[i];
         var m = '\t--' + flag.cmd;
         if (flag.letter != undefined) {
           m = m + ' / -' + flag.letter;
         }
-        this.console.out(m);
+        this.iconsole.out(m);
         if (flag.description != undefined) {
-          this.console.out('\t\t' + flag.description);
+          this.iconsole.out('\t\t' + flag.description);
         }
       }
       this.done = true;
     } else if (this.map.get(VERSION.cmd) != undefined) {
-      this.console.out(VERSION_NBR);
+      this.iconsole.out(VERSION_NBR);
       /*
       console.log('Trying to read the version number from the slink install package.json at');
       console.log('this.home = ' + this.home + " + package.json");
@@ -922,11 +928,11 @@ export class CliCtx implements I_CliCtx {
    */
   out(message: string) {
     this.log.log(message);
-    this.console.out(message);
+    this.iconsole.out(message);
   }
 
   print(message: string) {
-    this.console.out(message);
+    this.iconsole.out(message);
   }
 
   getProc(): I_Proc {

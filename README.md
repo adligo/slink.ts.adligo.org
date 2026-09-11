@@ -6,6 +6,11 @@ To install slink run the following command;
 
 ```
 npm install -g @ts.adligo.org/slink
+# Update your path to include the slink cli program that calls slink.mjs
+# Windows, Note the following backslach in the middle of this line may not copy and past correctly!
+export PATH=$PATH:~/AppData/Roaming/npm/node_modules/\@ts.adligo.org/slink/dist/win
+# Or Unix
+export PATH=$PATH:/usr/local/lib/node_modules/\@ts.adligo.org/slink/dist/unix
 ```
 
 ## Verify slink
