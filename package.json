@@ -46,5 +46,5 @@
   ],
   "type": "module",
   "package.json.version": "Search for package.json.version in slink.mts and sync the version string!",
-  "version": "1.7.0g"
+  "version": "1.7.0"
 }
