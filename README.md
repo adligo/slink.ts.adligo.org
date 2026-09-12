@@ -13,6 +13,11 @@ export PATH=$PATH:~/AppData/Roaming/npm/node_modules/\@ts.adligo.org/slink/dist/
 export PATH=$PATH:/usr/local/lib/node_modules/\@ts.adligo.org/slink/dist/unix
 ```
 
+```
+# Also if you need the Windows path, for Jenkins, it's something like this;
+C:\Users\<your_username/>\AppData\Roaming\npm\node_modules\@ts.adligo.org\slink\dist\win
+```
+
 ## Verify slink
 
 ```

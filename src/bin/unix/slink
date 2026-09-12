@@ -1,2 +1,3 @@
+#!/bin/bash
 # This is the new shell script for slink on node 26+ on unix
 node --disable-warning=DEP0190 /usr/local/lib/node_modules/\@ts.adligo.org/slink/dist/slink.mjs "$@"
