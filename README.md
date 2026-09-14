@@ -174,6 +174,8 @@ Once that's done run the following from slink.ts.adligo.org ;
 npm publish 
 ```
 
+Also note: Sometimes you may need to open an incognito window to pass the authentication issues.
+
 ## Note for Windows Users
 
 Creating a symbolic link is kind of a huge pain in Windows.  First try to see if you can do it without slink using this short tutorial;

@@ -1,7 +1,7 @@
 {
   "author": "Adligo Inc / Scott Morgan",
   "bin": {
-    "slink": "./dist/slink.mjs"
+    "slink": "dist/slink.mjs"
   },
   "bugs": {
     "url": "https://github.com/adligo/slink.ts.adligo.org/issues"
@@ -34,11 +34,8 @@
     "build": "echo 'in build' && node --disable-warning=DEP0190 build.cjs",
     "link-slink": "node --disable-warning=DEP0190 build.cjs --install-local",
     "test": "echo see https://github.com/adligo/slink_tests.ts.adligo.org",
-    "tsc": "tsc",
-    "wtf": "echo 'in wtf'",
-    "wtf2": "which echo"
+    "tsc": "tsc"
   },
-  
   "sharedNodeModuleProjectSLinkEnvVar": [
     "SLINK_NODE_MODULE_SLINK"
   ],
