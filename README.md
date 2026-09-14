@@ -2,6 +2,20 @@
 This is a simple Type Script Application that will create and store symbolic link data into your package.json file under the dependencySLinks or dependencySLinkGroups sections. This can help you improve the speed of changing upstream Javascript or Typescript in a multiple project dependency system.  
 
 ## Install slink
+
+SLink can now be installed just like any other package and linked to from your node_modules directory.
+
+## SLINK_HOME
+
+SLINK_HOME is just like typical home environment variables and can be set as follows:
+
+```
+export SLINK_HOME=/c/foo/bar/node_modules/\@ts.adligo.org/slink
+```
+
+This allows you customization over which SLink you are linking to, so that you can have different versions of slink installed.
+
+## Install slink Globally
 To install slink run the following command;
 
 ```

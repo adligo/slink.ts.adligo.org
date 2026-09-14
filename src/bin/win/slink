@@ -1,4 +1,24 @@
 #!/bin/bash
-# This is the new shell script for slink on node 26+ on windows, use GitBash to execute it
+# This is the new shell script for my hack of slink on node 26+ on windows, use GitBash to execute it
 # https://git-scm.com/install/windows
-node --disable-warning=DEP0190 ~/AppData/Roaming/npm/node_modules/\@ts.adligo.org/slink/dist/slink.mjs "$@"
+# 
+# It gets slink running like it used to work, in versions of node before 26
+# or you can set the SLINK_HOME, like many other programs work (mvn, ant, gradle, etc)
+#
+
+# default to the global install
+slinkPath=~/AppData/Roaming/npm/node_modules/\@ts.adligo.org/slink/dist/slink.mts
+
+if [ -z "${SLINK_HOME+x}" ]; then
+    # echo "SLINK_HOME is completely unset"
+    cwd=`which slink` # should return somthing like /c/apps/nvm/2.0.0/v26.8.2/node_modules/\@ts.adligo.org/slink/dist/win/slink
+    len=${#cwd}
+    cwd=${cwd:0:len - 15} # /dist is 5, /win is 4, /slink is 6 = 15
+    slinkPath=$cwd/dist/slink.mts
+else
+    # echo "SLINK_HOME is set to $SLINK_HOME"
+    slinkPath=$SLINK_HOME/dist/slink.mts
+fi
+
+# echo "executing slink in $slinkPath"
+bun $slinkPath "$@"

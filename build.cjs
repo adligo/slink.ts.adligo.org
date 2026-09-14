@@ -98,6 +98,7 @@ if (!processed) {
   run('rm', ['-fr', 'dist'], options);
   console.log('running tsc')
   run(npm, ['run', 'tsc'], options);
+  run('cp', ['src/slink.mts', 'dist'], options);
   run('mkdir', ['dist/win'], options);
   run('mkdir', ['dist/unix'], options);
   run('cp', ['src/bin/win/slink', 'dist/win'], options);
